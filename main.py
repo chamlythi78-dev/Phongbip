@@ -166,4 +166,4 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT RUNNING...")
-app.run_polRailw
+app.run_polling()
