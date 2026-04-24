@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 import os
 import asyncio
 import random # thêm
+def gen_code():
+    return ''.join(random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(8))
 
 # ===== CONFIG =====
 TOKEN = "8622389687:AAGqQoYBhmmsQI65k5Vqv9uTjTe2YpVasFk"
@@ -25,7 +27,14 @@ def query(q, args=()):
     cur.execute(q, args)
     conn.commit()
     return cur
-
+    
+query("""
+CREATE TABLE IF NOT EXISTS codes (
+    code TEXT PRIMARY KEY,
+    reward INTEGER,
+    uses INTEGER
+)
+""")
 query("""
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
@@ -47,6 +56,27 @@ query("CREATE TABLE IF NOT EXISTS banned (user_id INTEGER PRIMARY KEY)")
 def get_user(uid):
     if not query("SELECT 1 FROM users WHERE user_id=?", (uid,)).fetchone():
         query("INSERT INTO users(user_id) VALUES(?)", (uid,))
+ def get_balance(uid):
+    get_user(uid)
+    return query("SELECT balance FROM users WHERE user_id=?", (uid,)).fetchone()[0]
+
+
+# 👉 DÁN Ở ĐÂY
+async def tao_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    try:
+        reward = int(ctx.args[0])
+        uses = int(ctx.args[1])
+    except:
+        await update.message.reply_text("Sai cú pháp: /taocode tien luot")
+        return
+
+    code = gen_code()
+    query("INSERT INTO codes (code, reward, uses) VALUES(?,?,?)", (code, reward, uses))
+
+    await update.message.reply_text(f"🎁 Code: {code}\n💰 {reward}đ\n🔁 {uses} lượt")       
 
 def is_banned(uid):
     return query("SELECT 1 FROM banned WHERE user_id=?", (uid,)).fetchone() is not None
@@ -178,6 +208,27 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     elif txt == "📞 Hỗ trợ":
         await update.message.reply_text("@RoGarden")
+    elif txt.startswith("/code"):
+        try:
+        code = txt.split(" ")[1].strip().upper()
+        except:
+        return await update.message.reply_text("Dùng: /code ABC123")
+
+        data = query("SELECT * FROM codes WHERE code=?", (code,)).fetchone()
+
+        if not data:
+        return await update.message.reply_text("❌ Code sai")
+
+        reward, uses = data[1], data[2]
+
+        if uses <= 0:
+        return await update.message.reply_text("❌ Code hết lượt")
+
+        add_money(uid, reward, "code")
+
+        query("UPDATE codes SET uses=uses-1 WHERE code=?", (code,))
+
+        await update.message.reply_text(f"🎉 Nhận {reward}đ")
 
 # ===== TÀI XỈU CALLBACK =====
 async def taixiu_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -372,6 +423,7 @@ app.add_handler(CommandHandler("ban", ban))
 app.add_handler(CommandHandler("unban", unban))
 app.add_handler(CommandHandler("stats", stats))
 app.add_handler(CommandHandler("all", all_user))
+app.add_handler(CommandHandler("taocode", tao_code))
 
 app.add_handler(CommandHandler("his", history_pro))
 app.add_handler(CommandHandler("hisall", history_all_admin))
