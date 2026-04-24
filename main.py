@@ -282,6 +282,82 @@ async def handle_withdraw_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         add_money(uid, amount, "refund")
         await ctx.bot.send_message(uid, f"❌ Bị từ chối")
         await query_btn.edit_message_text("❌ ĐÃ TỪ CHỐI")
+        # ===== ADMIN COMMANDS (FIX LỖI) =====
+async def add(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    try:
+        uid = int(ctx.args[0])
+        amt = int(ctx.args[1])
+        add_money(uid, amt, "admin_add")
+        await update.message.reply_text("Đã cộng tiền")
+    except:
+        await update.message.reply_text("Sai cú pháp /add uid amount")
+
+async def sub(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    try:
+        uid = int(ctx.args[0])
+        amt = int(ctx.args[1])
+        sub_money(uid, amt)
+        await update.message.reply_text("Đã trừ tiền")
+    except:
+        await update.message.reply_text("Sai cú pháp /sub uid amount")
+
+async def ban(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    try:
+        uid = int(ctx.args[0])
+        query("INSERT OR IGNORE INTO banned(user_id) VALUES(?)", (uid,))
+        await update.message.reply_text("Đã ban")
+    except:
+        await update.message.reply_text("Sai cú pháp /ban uid")
+
+async def unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    try:
+        uid = int(ctx.args[0])
+        query("DELETE FROM banned WHERE user_id=?", (uid,))
+        await update.message.reply_text("Đã unban")
+    except:
+        await update.message.reply_text("Sai cú pháp /unban uid")
+
+async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    total = query("SELECT COUNT(*) FROM users").fetchone()[0]
+    await update.message.reply_text(f"Tổng user: {total}")
+
+async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    users = query("SELECT user_id FROM users").fetchall()
+    msg = "\n".join([str(u[0]) for u in users[:50]])
+    await update.message.reply_text(msg or "Không có user")
+
+# ===== HISTORY ADMIN FIX =====
+async def history_pro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    data = query("SELECT * FROM history WHERE user_id=? ORDER BY rowid DESC LIMIT 10", (uid,)).fetchall()
+    msg = "\n".join([f"{d[1]} | {d[2]}" for d in data])
+    await update.message.reply_text(msg or "Không có")
+
+async def history_all_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    data = query("SELECT * FROM history ORDER BY rowid DESC LIMIT 20").fetchall()
+    msg = "\n".join([f"{d[0]} | {d[1]} | {d[2]}" for d in data])
+    await update.message.reply_text(msg or "Không có")
+
+# ===== CALLBACK HISTORY (TRÁNH LỖI) =====
+async def history_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer("Chưa dùng")
+
+async def history_all_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer("Chưa dùng")
 
 # ===== RUN =====
 app = ApplicationBuilder().token(TOKEN).build()
