@@ -7,7 +7,7 @@ import asyncio
 import random  # thêm
 
 # ===== CONFIG =====
-TOKEN = "8622389687:AAGqQoYBhmmsQI65k5Vqv9uTjTe2YpVasFk "
+TOKEN = "8622389687:AAGqQoYBhmmsQI65k5Vqv9uTjTe2YpVasFk"
 ADMIN_ID = 8619503816
 
 GROUP_IDS = [-1003663678808]
