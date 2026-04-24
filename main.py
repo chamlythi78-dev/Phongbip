@@ -15,7 +15,7 @@ GROUP_IDS = [-1003663678808]
 GROUP_LINKS = ["https://t.me/thanhall"]
 
 BOT_USERNAME = "loclastk2026bot"
-MIN_WITHDRAW = 12000
+MIN_WITHDRAW = 37000
 
 # ===== DB =====
 conn = sqlite3.connect("bot.db", check_same_thread=False)
@@ -145,16 +145,16 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Hôm nay nhận rồi")
             return
 
-        add_money(uid, 1000, "checkin")
+        add_money(uid, 10000, "checkin")
         query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
-        await update.message.reply_text("🎉 +1000đ")
+        await update.message.reply_text("🎉 +10000đ")
 
     elif txt == "📮 Mời bạn":
         msg = (
             "🎁 KIẾM TIỀN CÙNG BẠN BÈ\n"
-            "1F = 4,000đ\n"
+            "1F = 3,000đ\n"
             "💸 Mời bạn bè nhận ngay +4,000đ mỗi lượt\n"
-            "🏦 Min rút: 20,000đ\n\n"
+            "🏦 Min rút: 37,000đ\n\n"
             f"https://t.me/{BOT_USERNAME}?start={uid}"
         )
         await update.message.reply_text(msg, disable_web_page_preview=False)
@@ -230,7 +230,7 @@ async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     if amount < MIN_WITHDRAW:
-        await update.message.reply_text("Min 12k")
+        await update.message.reply_text("Min 37k")
         return
 
     now = datetime.now()
