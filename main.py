@@ -210,14 +210,14 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif txt == "📞 Hỗ trợ":
         await update.message.reply_text("@RoGarden")
     elif txt.startswith("/code"):
-        try:
+    try:
         code = txt.split(" ")[1].strip().upper()
-        except:
+    except:
         return await update.message.reply_text("Dùng: /code ABC123")
 
-        data = query("SELECT * FROM codes WHERE code=?", (code,)).fetchone()
+    data = query("SELECT * FROM codes WHERE code=?", (code,)).fetchone()
 
-        if not data:
+    if not data:
         return await update.message.reply_text("❌ Code sai")
 
         reward, uses = data[1], data[2]
