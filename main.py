@@ -56,7 +56,8 @@ query("CREATE TABLE IF NOT EXISTS banned (user_id INTEGER PRIMARY KEY)")
 def get_user(uid):
     if not query("SELECT 1 FROM users WHERE user_id=?", (uid,)).fetchone():
         query("INSERT INTO users(user_id) VALUES(?)", (uid,))
- def get_balance(uid):
+
+def get_balance(uid):
     get_user(uid)
     return query("SELECT balance FROM users WHERE user_id=?", (uid,)).fetchone()[0]
 
