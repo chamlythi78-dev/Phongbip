@@ -166,7 +166,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("🎲 Xỉu", callback_data="tx_xiu")
             ]
         ])
-        await update.message.reply_text("Chọn cửa (cược mặc định 1000):", reply_markup=keyboard)
+        await update.message.reply_text("Chọn cửa (cược mặc định 10000):", reply_markup=keyboard)
 
     elif txt == "🛒 Rút tiền":
         await update.message.reply_text("Dùng: /rut bank stk ten amount")
@@ -193,7 +193,7 @@ async def taixiu_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await force_join(query_btn)
 
     choice = query_btn.data.split("_")[1]
-    bet = 1000
+    bet = 10000
 
     if get_balance(uid) < bet:
         return await query_btn.message.reply_text("Không đủ tiền")
