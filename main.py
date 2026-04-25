@@ -220,19 +220,22 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await force_join(update)
         return
 
+    # Tính năng Reply người dùng
+    user_reply = update.message
+
     if txt == "💰 Số dư":
         bal = get_balance(uid)
-        await update.message.reply_text(f"💳 **SỐ DƯ CỦA BẠN:**\n\n💰 `{bal:,} VND`", parse_mode="Markdown")
+        await user_reply.reply_text(f"💳 **SỐ DƯ CỦA BẠN:**\n\n💰 `{bal:,} VND`", parse_mode="Markdown")
 
     elif txt == "🎁 Checkin":
         today = str(datetime.now().date())
         last = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()[0]
         if last == today:
-            await update.message.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
+            await user_reply.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
             return
         add_money(uid, 10000, "Daily Checkin")
         query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
-        await update.message.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+10,000đ`", parse_mode="Markdown")
+        await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+10,000đ`", parse_mode="Markdown")
 
     elif txt == "📮 Mời bạn":
         msg = (
@@ -240,36 +243,65 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "💵 1F = `3,000đ`\n"
             f"🔗 **Link của bạn:**\n`https://t.me/{BOT_USERNAME}?start={uid}`"
         )
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        await user_reply.reply_text(msg, parse_mode="Markdown")
 
     elif txt == "🎲 Tài xỉu":
+        # Chèn nút bấm Tài Xỉu
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🎲 TÀI", callback_data="tx_tai"),
+            InlineKeyboardButton("🎲 XỈU", callback_data="tx_xiu")
+        ]])
         msg = (
             "🎲 **TRÒ CHƠI TÀI XỈU**\n\n"
-            "Cú pháp đặt cược:\n"
-            "`/tx [tai/xiu] [số tiền]`\n\n"
-            "Ví dụ: `/tx tai 50000` (Cược 50k vào Tài)\n"
-            "⚠️ Mức cược tối thiểu: `1,000đ`"
+            "1️⃣ **Cược nhanh (10,000đ):** Chọn nút bên dưới.\n"
+            "2️⃣ **Cược tự do:** Dùng lệnh `/tx [tai/xiu] [số tiền]`\n"
+            "   VD: `/tx tai 50000`"
         )
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        await user_reply.reply_text(msg, reply_markup=keyboard, parse_mode="Markdown")
 
     elif txt == "🛒 Rút tiền":
-        await update.message.reply_text("🏦 **RÚT TIỀN**\n\nCú pháp: `/rut [Ngân_hàng] [STK] [Tên] [Số_tiền]`", parse_mode="Markdown")
+        await user_reply.reply_text("🏦 **RÚT TIỀN**\n\nCú pháp: `/rut [Ngân_hàng] [STK] [Tên] [Số_tiền]`", parse_mode="Markdown")
 
     elif txt == "📜 Lịch sử":
         data = query("SELECT amount, note FROM history WHERE user_id=? ORDER BY rowid DESC LIMIT 5", (uid,)).fetchall()
         if not data:
-            await update.message.reply_text("📭 Trống.")
+            await user_reply.reply_text("📭 Trống.")
         else:
             msg = "📜 **LỊCH SỬ GIAO DỊCH:**\n\n"
             for d in data:
                 icon = "➕" if d[0] > 0 else "➖"
                 msg += f"{icon} `{d[0]:,}đ` | {d[1]}\n"
-            await update.message.reply_text(msg, parse_mode="Markdown")
+            await user_reply.reply_text(msg, parse_mode="Markdown")
 
     elif txt == "📞 Hỗ trợ":
-        await update.message.reply_text("📩 Admin: @RoGarden")
+        await user_reply.reply_text("📩 Admin: @RoGarden")
 
-# ===== TÀI XỈU CƯỢC TỰ DO =====
+# ===== TÀI XỈU CALLBACK (NÚT BẤM CỐ ĐỊNH 10K) =====
+async def taixiu_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query_btn = update.callback_query
+    await query_btn.answer()
+    uid = query_btn.from_user.id
+    if is_banned(uid) or get_balance(uid) < 10000:
+        return await query_btn.message.reply_text("❌ Không đủ 10,000đ.")
+
+    choice = query_btn.data.split("_")[1]
+    dice = [random.randint(1, 6) for _ in range(3)]
+    total = sum(dice)
+    result = "tai" if total >= 11 else "xiu"
+
+    if choice == result:
+        add_money(uid, 10000, "Thắng Tài Xỉu (Nút)")
+        msg = "🎉 **BẠN ĐÃ THẮNG!**"
+    else:
+        sub_money(uid, 10000)
+        msg = "💀 **BẠN ĐÃ THUA!**"
+
+    await query_btn.edit_message_text(
+        f"🎲 Kết quả: `{dice[0]}+{dice[1]}+{dice[2]}={total}` ({result.upper()})\n\n{msg}\n💰 Số dư: `{get_balance(uid):,}đ`",
+        parse_mode="Markdown"
+    )
+
+# ===== TÀI XỈU CƯỢC TỰ DO (LỆNH TX) =====
 async def logic_taixiu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid) or not await joined(uid, ctx.bot): return
@@ -378,7 +410,8 @@ app.add_handler(CommandHandler("hisall", history_all_admin))
 app.add_handler(CommandHandler("tx", logic_taixiu))
 
 app.add_handler(CallbackQueryHandler(handle_withdraw_action, pattern="^(ok_|no_)"))
+app.add_handler(CallbackQueryHandler(taixiu_button, pattern="^tx_"))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG VỚI TÍNH NĂNG CƯỢC TỰ DO!")
+print("BOT ĐÃ SẴN SÀNG!")
 app.run_polling()
