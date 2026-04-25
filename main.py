@@ -220,7 +220,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 row = query("SELECT refed FROM users WHERE user_id=?", (uid,)).fetchone()
                 if row and row[0] == 0:
                     if query("SELECT 1 FROM users WHERE user_id=?", (ref,)).fetchone():
-                        add_money(ref, 2000, "Ref bonus")
+                        add_money(ref, 3000, "Ref bonus")
                         query("UPDATE users SET refs=refs+1 WHERE user_id=?", (ref,))
                         query("UPDATE users SET refed=1 WHERE user_id=?", (uid,))
         except: pass
@@ -240,20 +240,26 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if txt == "💰 Số dư":
         await update.message.reply_text(f"💳 **SỐ DƯ:** `{get_balance(uid):,} VND`", parse_mode="Markdown")
-    elif txt == "🎁 Checkin":
+        elif txt == "🎁 Checkin":
         today = str(datetime.now().date())
-        last = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()[0]
-        if last == today:
+        row = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()
+        last = row[0] if row else None
+        
+    if last == today:
             return await update.message.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
+        
         add_money(uid, 10000, "Daily Checkin")
         query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
         await update.message.reply_text("🎉 **CHECKIN:** `+10,000đ`", parse_mode="Markdown")
-        elif txt == "📮 Mời bạn":
-                await update.message.reply_text(
+
+    elif txt == "📮 Mời bạn":
+        await update.message.reply_text(
             f"🚀 **LINK MỜI:**\n`https://t.me/{BOT_USERNAME}?start={uid}`\n\n"
             f"💰 **Mời 1f = 3.000đ**\n"
             f"💳 **Min Rút Tiền = 37.000đ**",
-            parse_mode="Markdown")
+            parse_mode="Markdown"
+        )
+
 
 
     elif txt == "🎲 Tài xỉu":
