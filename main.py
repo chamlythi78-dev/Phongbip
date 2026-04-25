@@ -15,7 +15,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 8619503816
 GROUP_IDS = [-1003663678808]
 GROUP_LINKS = ["https://t.me/thanhall"]
-BOT_USERNAME = "loclastk2026bot"
+BOT_USERNAME = "mbbankstk2026bot "
 MIN_WITHDRAW = 37000
 
 # ===== DATABASE SETUP =====
