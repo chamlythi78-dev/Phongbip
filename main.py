@@ -1,4 +1,3 @@
-
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
 import sqlite3
@@ -244,11 +243,14 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg, parse_mode="Markdown")
 
     elif txt == "🎲 Tài xỉu":
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🎲 TÀI", callback_data="tx_tai"),
-            InlineKeyboardButton("🎲 XỈU", callback_data="tx_xiu")
-        ]])
-        await update.message.reply_text("🎮 Chọn cửa dự đoán (Cược: `10,000đ`)", reply_markup=keyboard, parse_mode="Markdown")
+        msg = (
+            "🎲 **TRÒ CHƠI TÀI XỈU**\n\n"
+            "Cú pháp đặt cược:\n"
+            "`/tx [tai/xiu] [số tiền]`\n\n"
+            "Ví dụ: `/tx tai 50000` (Cược 50k vào Tài)\n"
+            "⚠️ Mức cược tối thiểu: `1,000đ`"
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown")
 
     elif txt == "🛒 Rút tiền":
         await update.message.reply_text("🏦 **RÚT TIỀN**\n\nCú pháp: `/rut [Ngân_hàng] [STK] [Tên] [Số_tiền]`", parse_mode="Markdown")
@@ -267,28 +269,44 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif txt == "📞 Hỗ trợ":
         await update.message.reply_text("📩 Admin: @RoGarden")
 
-# ===== TÀI XỈU CALLBACK =====
-async def taixiu_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    query_btn = update.callback_query
-    await query_btn.answer()
-    uid = query_btn.from_user.id
-    if is_banned(uid) or get_balance(uid) < 10000:
-        return await query_btn.message.reply_text("❌ Không đủ 10,000đ.")
+# ===== TÀI XỈU CƯỢC TỰ DO =====
+async def logic_taixiu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if is_banned(uid) or not await joined(uid, ctx.bot): return
 
-    choice = query_btn.data.split("_")[1]
+    if len(ctx.args) < 2:
+        return await update.message.reply_text("❌ Sai cú pháp! VD: `/tx tai 10000`", parse_mode="Markdown")
+
+    cua_chon = ctx.args[0].lower()
+    try:
+        cuoc = int(ctx.args[1])
+    except:
+        return await update.message.reply_text("❌ Số tiền cược không hợp lệ.")
+
+    if cua_chon not in ["tai", "xiu"]:
+        return await update.message.reply_text("❌ Chỉ được chọn `tai` hoặc `xiu`.")
+    
+    if cuoc < 1000:
+        return await update.message.reply_text("❌ Mức cược tối thiểu là 1,000đ.")
+
+    if get_balance(uid) < cuoc:
+        return await update.message.reply_text("❌ Bạn không đủ số dư để thực hiện cược này.")
+
     dice = [random.randint(1, 6) for _ in range(3)]
     total = sum(dice)
     result = "tai" if total >= 11 else "xiu"
 
-    if choice == result:
-        add_money(uid, 10000, "Thắng Tài Xỉu")
-        msg = "🎉 **BẠN ĐÃ THẮNG!**"
+    if cua_chon == result:
+        add_money(uid, cuoc, f"Thắng Tài Xỉu (Cược {cuoc:,})")
+        status = f"🎉 **BẠN ĐÃ THẮNG!**\n💰 Nhận được: `+{cuoc:,}đ`"
     else:
-        sub_money(uid, 10000)
-        msg = "💀 **BẠN ĐÃ THUA!**"
+        sub_money(uid, cuoc)
+        status = f"💀 **BẠN ĐÃ THUA!**\n💸 Mất: `-{cuoc:,}đ`"
 
-    await query_btn.edit_message_text(
-        f"🎲 Kết quả: `{dice}` ({total} - {result.upper()})\n\n{msg}\n💰 Số dư: `{get_balance(uid):,}đ`",
+    await update.message.reply_text(
+        f"🎲 Kết quả: `{dice[0]} + {dice[1]} + {dice[2]} = {total}` ({result.upper()})\n\n"
+        f"{status}\n"
+        f"💳 Số dư hiện tại: `{get_balance(uid):,}đ`",
         parse_mode="Markdown"
     )
 
@@ -357,10 +375,10 @@ app.add_handler(CommandHandler("stats", stats))
 app.add_handler(CommandHandler("all", all_user))
 app.add_handler(CommandHandler("his", history_pro))
 app.add_handler(CommandHandler("hisall", history_all_admin))
+app.add_handler(CommandHandler("tx", logic_taixiu))
 
 app.add_handler(CallbackQueryHandler(handle_withdraw_action, pattern="^(ok_|no_)"))
-app.add_handler(CallbackQueryHandler(taixiu_button, pattern="^tx_"))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG VỚI 100% TÍNH NĂNG!")
+print("BOT ĐÃ SẴN SÀNG VỚI TÍNH NĂNG CƯỢC TỰ DO!")
 app.run_polling()
