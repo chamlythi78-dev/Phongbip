@@ -248,8 +248,14 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         add_money(uid, 10000, "Daily Checkin")
         query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
         await update.message.reply_text("🎉 **CHECKIN:** `+10,000đ`", parse_mode="Markdown")
-    elif txt == "📮 Mời bạn":
-        await update.message.reply_text(f"🚀 **LINK MỜI:**\n`https://t.me/{BOT_USERNAME}?start={uid}`", parse_mode="Markdown")
+        elif txt == "📮 Mời bạn":
+                await update.message.reply_text(
+            f"🚀 **LINK MỜI:**\n`https://t.me/{BOT_USERNAME}?start={uid}`\n\n"
+            f"💰 **Mời 1f = 3.000đ**\n"
+            f"💳 **Min Rút Tiền = 37.000đ**",
+            parse_mode="Markdown")
+
+
     elif txt == "🎲 Tài xỉu":
         await update.message.reply_text("🎮 Nhập số tiền muốn cược:", parse_mode="Markdown")
         ctx.user_data['waiting_bet'] = True
