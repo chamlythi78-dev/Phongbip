@@ -99,7 +99,7 @@ async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     
     if not ctx.args:
-        await update.message.reply_text("❌ Vui lòng nhập kèm mã. VD: `/code ABC123`", parse_mode="Markdown")
+        await update.message.reply_text("❌ Vui lòng nhập kèm mã. VD: `/code ABC123`")
         return
 
     code_str = ctx.args[0].strip().upper()
@@ -269,7 +269,10 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     elif txt == "🎁 Checkin":
         today = str(datetime.now().date())
-        last = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()[7] # fix index last_checkin
+        # Lấy dữ liệu từ db
+        res = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()
+        last = res[0] if res else None
+        
         if last == today:
             await user_reply.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
             return
@@ -413,7 +416,6 @@ async def handle_withdraw_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         await ctx.bot.send_message(uid, "❌ Yêu cầu rút tiền bị từ chối. Tiền đã được hoàn lại.")
         await query_btn.edit_message_text(f"❌ TỪ CHỐI ID {uid}")
 
-# Lệnh /his chi tiết cho người dùng
 async def history_pro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     data = query("SELECT amount, note, time FROM history WHERE user_id=? ORDER BY rowid DESC LIMIT 10", (uid,)).fetchall()
