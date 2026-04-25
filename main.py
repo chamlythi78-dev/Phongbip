@@ -239,8 +239,6 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         msg = (
             "🚀 **KIẾM TIỀN TỪ LƯỢT MỜI**\n\n"
             "💵 1F = `3,000đ`\n"
-            "Min rút tiền 37,000đ"
-
             f"🔗 **Link của bạn:**\n`https://t.me/{BOT_USERNAME}?start={uid}`"
         )
         await update.message.reply_text(msg, parse_mode="Markdown")
@@ -366,4 +364,3 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG VỚI 100% TÍNH NĂNG!")
 app.run_polling()
- 
