@@ -11,12 +11,13 @@ def gen_code():
     return ''.join(random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(8))
 
 # ===== CONFIG =====
-TOKEN "8731829680:AAEhRLWMqzK7SmA3onuViJMkQVdptY98Nm0" 
+TOKEN = "8731829680:AAEhRLwMqzk7SnA3onuViJWkQVdptY98Nm0"
 ADMIN_ID = 8619503816
 GROUP_IDS = [-1003663678808]
 GROUP_LINKS = ["https://t.me/thanhall"]
 BOT_USERNAME = "loclastk2026bot"
 MIN_WITHDRAW = 37000
+
 
 # ===== DATABASE SETUP =====
 conn = sqlite3.connect("bot.db", check_same_thread=False)
