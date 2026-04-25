@@ -269,7 +269,6 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     elif txt == "🎁 Checkin":
         today = str(datetime.now().date())
-        # Lấy dữ liệu từ db
         res = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()
         last = res[0] if res else None
         
@@ -316,16 +315,17 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await user_reply.reply_text(msg, parse_mode="Markdown")
 
     elif txt == "📞 Hỗ trợ":
-        await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm!")
+        await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây hoặc liên hệ qua Telegram: @@RoGarden, Admin sẽ phản hồi sớm!")
 
     else:
-        # Nếu không phải lệnh menu, gửi tin nhắn hỗ trợ này về Admin
+        # Gửi tin nhắn về Admin (Bao gồm cả khi Admin tự nhắn để test hiển thị)
+        await ctx.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"📨 **TIN NHẮN HỖ TRỢ**\n👤 ID: `{uid}`\n📝 Nội dung: {txt}",
+            parse_mode="Markdown"
+        )
+        # Chỉ thông báo "Đã gửi" cho người dùng, Admin nhắn thì không cần báo
         if uid != ADMIN_ID:
-            await ctx.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=f"📨 **TIN NHẮN HỖ TRỢ**\n👤 ID: `{uid}`\n📝 Nội dung: {txt}",
-                parse_mode="Markdown"
-            )
             await user_reply.reply_text("✅ Đã gửi yêu cầu tới Admin!")
 
 # ===== TÀI XỈU CALLBACK (NÚT BẤM CỐ ĐỊNH 10K) =====
