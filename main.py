@@ -238,14 +238,15 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await force_join(update)
         return
 
-    if txt == "💰 Số dư":
-        await update.message.reply_text(f"💳 **SỐ DƯ:** `{get_balance(uid):,} VND`", parse_mode="Markdown")
-        elif txt == "🎁 Checkin":
+        if txt == "💰 Số dư":
+        await update.message.reply_text(f"💳 **SỐ DƯ:** `{get_balance(uid):,}` VNĐ", parse_mode="Markdown")
+
+    elif txt == "🎁 Checkin":
         today = str(datetime.now().date())
         row = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()
         last = row[0] if row else None
         
-    if last == today:
+        if last == today:
             return await update.message.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
         
         add_money(uid, 10000, "Daily Checkin")
@@ -257,9 +258,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"🚀 **LINK MỜI:**\n`https://t.me/{BOT_USERNAME}?start={uid}`\n\n"
             f"💰 **Mời 1f = 3.000đ**\n"
             f"💳 **Min Rút Tiền = 37.000đ**",
-            parse_mode="Markdown"
-        )
-
+            parse_mode="Markdown")
 
 
     elif txt == "🎲 Tài xỉu":
