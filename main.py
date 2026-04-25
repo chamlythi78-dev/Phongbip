@@ -11,7 +11,7 @@ def gen_code():
     return ''.join(random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(8))
 
 # ===== CONFIG =====
-TOKEN ="8622389687:AAGqQoYBhmmsQI65k5Vqv9uTjTe2YpVasFk" 
+TOKEN = os.getenv("TOKEN")
 ADMIN_ID = 8619503816
 GROUP_IDS = [-1003663678808]
 GROUP_LINKS = ["https://t.me/thanhall"]
