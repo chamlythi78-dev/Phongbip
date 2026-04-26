@@ -16,7 +16,7 @@ ADMIN_ID = 8619503816
 GROUP_IDS = [-1003663678808]
 GROUP_LINKS = ["https://t.me/thanhall"]
 BOT_USERNAME = "mbbankstk2026bot" 
-MIN_WITHDRAW = 37000
+MIN_WITHDRAW = 100000
 
 # THÔNG TIN NẠP TIỀN
 BANK_INFO = """
@@ -497,7 +497,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if res and res[0] == today:
             await user_reply.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
             return
-        add_money(uid, 10000, "Daily Checkin")
+        add_money(uid,3000, "Daily Checkin")
         query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
         await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+10,000đ`", parse_mode="Markdown")
 
