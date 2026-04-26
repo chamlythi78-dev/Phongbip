@@ -444,6 +444,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif txt == "🎮 Danh sách game":
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx")],
+            [InlineKeyboardButton("💣 DÒ MÌN", callback_data="menu_mines")], # Chèn thêm nút Dò Mìn
             [InlineKeyboardButton("⚽️ BÓNG ĐÁ (PENALTY)", callback_data="menu_ball")],
             [InlineKeyboardButton("🎰 SLOT / 🏀 BÓNG RỔ", callback_data="menu_others")]
         ])
@@ -511,7 +512,64 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ctx.bot.send_message(u_id, "❌ Yêu cầu rút tiền bị từ chối. Tiền đã được hoàn lại.")
             await q.edit_message_text(f"❌ TỪ CHỐI ID {u_id}")
 
-    # Menu Game
+    # Menu Dò Mìn (Chèn thêm)
+    elif d == "menu_mines":
+        kb = []
+        row = []
+        for i, a in enumerate(amounts):
+            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"prep_mines_{a}"))
+            if (i + 1) % 4 == 0: kb.append(row); row = []
+        await q.edit_message_text("💣 **DÒ MÌN (MINES)**\nVui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("prep_mines_"):
+        amt = int(d.split("_")[2])
+        kb = [[InlineKeyboardButton("🚀 BẮT ĐẦU CHƠI", callback_data=f"start_mines_{amt}"), InlineKeyboardButton("🔙 Quay lại", callback_data="menu_mines")]]
+        await q.edit_message_text(f"💣 **DÒ MÌN**\n💰 Cược: `{amt:,}đ`\n⚠️ Có 3 quả mìn ẩn trong 15 ô. Mở ô để nhân tiền!", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("start_mines_"):
+        amt = int(d.split("_")[2])
+        if not sub_money(uid, amt, "Cược Dò Mìn"): return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
+        grid = [0]*12 + [1]*3 # 12 ô an toàn, 3 ô mìn
+        random.shuffle(grid)
+        ctx.user_data[f"mine_{uid}"] = {"grid": grid, "bet": amt, "opened": [], "mult": 1.4}
+        
+        kb = []
+        row = []
+        for i in range(15):
+            row.append(InlineKeyboardButton("❓", callback_data=f"play_mine_{i}"))
+            if (i+1) % 3 == 0: kb.append(row); row = []
+        await q.edit_message_text(f"💣 **DÒ MÌN ĐANG DIỄN RA**\n💰 Cược: `{amt:,}đ`\n📈 Hệ số tiếp theo: `x1.4`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("play_mine_"):
+        game = ctx.user_data.get(f"mine_{uid}")
+        if not game: return
+        idx = int(d.split("_")[2])
+        if idx in game["opened"]: return
+
+        if game["grid"][idx] == 1: # TRÚNG MÌN
+            del ctx.user_data[f"mine_{uid}"]
+            await q.edit_message_text(f"💥 **BÙM!!!**\nBạn đã dẫm phải mìn rồi.\n💀 Mất: `{game['bet']:,}đ`", parse_mode="Markdown")
+        else: # AN TOÀN
+            game["opened"].append(idx)
+            current_win = int(game["bet"] * game["mult"])
+            game["mult"] += 0.4
+            
+            kb = []
+            row = []
+            for i in range(15):
+                icon = "💎" if i in game["opened"] else "❓"
+                row.append(InlineKeyboardButton(icon, callback_data=f"play_mine_{i}"))
+                if (i+1) % 3 == 0: kb.append(row); row = []
+            kb.append([InlineKeyboardButton(f"💰 CHỐT LỜI: {current_win:,}đ", callback_data=f"claim_mine_{current_win}")])
+            await q.edit_message_text(f"💎 **AN TOÀN!**\n💰 Thưởng hiện tại: `{current_win:,}đ`\n📈 Lượt tới: `x{game['mult']:.1f}`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("claim_mine_"):
+        amt = int(d.split("_")[2])
+        add_money(uid, amt, "Thắng Dò Mìn")
+        if f"mine_{uid}" in ctx.user_data: del ctx.user_data[f"mine_{uid}"]
+        await q.edit_message_text(f"🎉 **CHÚC MỪNG!**\nBạn đã chốt lời thành công: `+{amt:,}đ`\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
+
+    # Menu Game cũ
     elif d == "menu_tx" or d == "menu_ball":
         g_type = "tx" if "tx" in d else "ball"
         kb = []
@@ -572,7 +630,7 @@ app.add_handler(CommandHandler("code", nhap_code))
 app.add_handler(CommandHandler("taocode", tao_code))
 app.add_handler(CommandHandler("rut", rut))
 app.add_handler(CommandHandler("lienket", lien_ket))
-app.add_handler(CommandHandler("resetbank", reset_bank)) # Lệnh Admin mới
+app.add_handler(CommandHandler("resetbank", reset_bank))
 app.add_handler(CommandHandler("add", add))
 app.add_handler(CommandHandler("sub", sub))
 app.add_handler(CommandHandler("ban", ban))
