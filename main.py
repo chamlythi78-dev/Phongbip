@@ -15,7 +15,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 8619503816
 GROUP_IDS = [-1003663678808]
 GROUP_LINKS = ["https://t.me/thanhall"]
-BOT_USERNAME = "mbbankstk2026bot" 
+BOT_USERNAME = "vuavipluxurybot" 
 MIN_WITHDRAW = 100000
 
 # THÔNG TIN NẠP TIỀN
@@ -522,7 +522,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif txt == "📮 Mời bạn":
         msg = (
             "🚀 **KIẾM TIỀN TỪ LƯỢT MỜI**\n\n"
-            "💵 1F = `3,000đ`\n"
+            "💵 1F = `2,000đ`\n"
             f"🔗 **Link của bạn:**\n`https://t.me/{BOT_USERNAME}?start={uid}`"
         )
         await user_reply.reply_text(msg, parse_mode="Markdown")
