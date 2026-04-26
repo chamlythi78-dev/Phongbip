@@ -135,7 +135,7 @@ async def play_car_race(update: Update, ctx: ContextTypes.DEFAULT_TYPE, choice, 
         add_money(uid, win_amt, f"Thắng đua xe {winner}")
         res_text = f"🎉 **CHIẾN THẮNG!** Xe **{winner}** về nhất!\n💰 Nhận: `+{win_amt:,}đ`"
     else:
-        res_text = f"💀 **THẤT BẠI!** Xe **{winner}** đã thắng cuộc."
+        res_text = f"💀 **THẮT BẠI!** Xe **{winner}** đã thắng cuộc."
 
     await ctx.bot.send_message(uid, f"{res_text}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
 
@@ -350,6 +350,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if is_banned(uid): return
     get_user(uid)
 
+    # Xử lý hệ thống giới thiệu (Ref)
     if ctx.args:
         try:
             ref = int(ctx.args[0])
@@ -362,10 +363,12 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         query("UPDATE users SET refed=1 WHERE user_id=?", (uid,))
         except: pass
 
+    # Kiểm tra tham gia nhóm bắt buộc
     if not await joined(uid, ctx.bot):
         await force_join(update)
         return
 
+    # Menu bàn phím chính
     menu = ReplyKeyboardMarkup([
         ["🎮 Danh sách game", "👤 Tài khoản"],
         ["💳 Nạp tiền", "🛒 Rút tiền"],
@@ -373,7 +376,22 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ["📜 Lịch sử", "📞 Hỗ trợ"]
     ], resize_keyboard=True)
 
-    await update.message.reply_text(f"👋 Chào mừng **{update.effective_user.first_name}**!", reply_markup=menu, parse_mode="Markdown")
+    # Nội dung chào mừng - LỰA CHỌN 1
+    welcome_text = (
+        f"👋 **CHÀO MỪNG {update.effective_user.first_name.upper()} ĐÃ THAM GIA!**\n\n"
+        f"Hệ thống trò chơi minh bạch — uy tín hàng đầu.\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 **MIN RÚT TIỀN:** `100.000đ`\n"
+        f"💳 **MIN NẠP TIỀN:** `10.000đ`\n"
+        f"⚠️ *Lưu ý: Nạp dưới 10k sẽ không được tự động duyệt.*\n\n"
+        f"⚖️ **CAM KẾT MINH BẠCH:**\n"
+        f"• **100%** Kết quả hoàn toàn ngẫu nhiên.\n"
+        f"• 🔁 **KHÔNG** can thiệp kết quả dưới mọi hình thức.\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🚀 Chúc bạn có những trải nghiệm may mắn và thú vị!"
+    )
+
+    await update.message.reply_text(welcome_text, reply_markup=menu, parse_mode="Markdown")
 
 # ===== LỆNH LIÊN KẾT =====
 async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -546,7 +564,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ctx.bot.send_message(u_id, "❌ Yêu cầu rút tiền bị từ chối. Tiền đã được hoàn lại.")
             await q.edit_message_text(f"❌ TỪ CHỐI ID {u_id}")
 
-    # Menu Đua Xe (Mới chèn)
+    # Menu Đua Xe
     elif d == "menu_race":
         kb = []
         row = []
@@ -709,3 +727,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG VỚI ĐẦY ĐỦ TÍNH NĂNG!")
 app.run_polling()
+
