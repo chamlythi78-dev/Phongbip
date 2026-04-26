@@ -531,7 +531,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await history_pro(update, ctx)
 
     elif txt == "📞 Hỗ trợ":
-        await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm!")
+        await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! Hoặc NT CHO @RoGarden")
 
     else:
         if uid != ADMIN_ID:
