@@ -499,7 +499,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return
         add_money(uid,3000, "Daily Checkin")
         query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
-        await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+10,000đ`", parse_mode="Markdown")
+        await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+3000đ`", parse_mode="Markdown")
 
     elif txt == "📮 Mời bạn":
         msg = (
