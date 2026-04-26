@@ -1,4 +1,4 @@
-herefrom telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
 import sqlite3
 from datetime import datetime, timedelta
@@ -328,7 +328,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"👋 Chào mừng **{update.effective_user.first_name}**!", reply_markup=menu, parse_mode="Markdown")
 
-# ===== LỆNH LIÊN KẾT (MỚI) =====
+# ===== LỆNH LIÊN KẾT =====
 async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
@@ -342,7 +342,7 @@ async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query("UPDATE users SET bank=?, stk=?, name=? WHERE user_id=?", (bank, stk, name, uid))
     await update.message.reply_text(f"✅ **LIÊN KẾT THÀNH CÔNG**\n\n🏦 Ngân hàng: {bank}\n💳 STK: `{stk}`\n👤 Chủ TK: {name}", parse_mode="Markdown")
 
-# ===== RÚT TIỀN (CẢI TIẾN) =====
+# ===== RÚT TIỀN =====
 async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
@@ -492,7 +492,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 chat_id=ADMIN_ID,
                 text=f"📨 **TIN NHẮN HỖ TRỢ**\n👤 ID: `{uid}`\n📝 Nội dung: {txt}",
                 parse_mode="Markdown"
-     2see       )
+            )
             await user_reply.reply_text("✅ Đã gửi yêu cầu tới Admin!")
 
 # ===== TÀI XỈU CALLBACK & RÚT TIỀN ACTION =====
@@ -551,7 +551,7 @@ app.add_handler(CommandHandler("ban", ban))
 app.add_handler(CommandHandler("unban", unban))
 app.add_handler(CommandHandler("stats", stats))
 app.add_handler(CommandHandler("all", all_user))
-app.add_handler(CommandHandler("his", history_pro)) # Đã kết nối đúng
+app.add_handler(CommandHandler("his", history_pro)) 
 app.add_handler(CommandHandler("hisall", history_all_admin))
 app.add_handler(CommandHandler("send", broadcast))
 app.add_handler(CommandHandler("rep", reply_user))
@@ -564,3 +564,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG!")
 app.run_polling()
+
