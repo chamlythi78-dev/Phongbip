@@ -103,12 +103,47 @@ async def force_join(update):
     )
 
 # ===== LOGIC GAMES ANIMATION =====
+
+# --- TRÒ CHƠI ĐUA XE (MỚI CHÈN) ---
+async def play_car_race(update: Update, ctx: ContextTypes.DEFAULT_TYPE, choice, amt):
+    uid = update.effective_user.id
+    track_length = 12
+    pos_a, pos_b = 0, 0
+    finish_line = "🏁"
+    
+    msg = await ctx.bot.send_message(uid, "🚥 **SẴN SÀNG...**")
+    await asyncio.sleep(1)
+    await msg.edit_text("🏎💨 **XUẤT PHÁT!!!**")
+
+    while pos_a < track_length and pos_b < track_length:
+        pos_a = min(pos_a + random.randint(1, 3), track_length)
+        pos_b = min(pos_b + random.randint(1, 3), track_length)
+        
+        line_a = "—" * pos_a + "🏎️" + " " * (track_length - pos_a) + finish_line + " **(A)**"
+        line_b = "—" * pos_b + "🏎️" + " " * (track_length - pos_b) + finish_line + " **(B)**"
+        
+        try:
+            await msg.edit_text(f"🏎️ **ĐUA XE SIÊU CẤP**\n\n`{line_a}`\n`{line_b}`", parse_mode="Markdown")
+            await asyncio.sleep(0.8)
+        except: pass
+
+    winner = "A" if pos_a >= track_length else "B"
+    win = (choice == winner)
+    
+    if win:
+        win_amt = int(amt * 1.95)
+        add_money(uid, win_amt, f"Thắng đua xe {winner}")
+        res_text = f"🎉 **CHIẾN THẮNG!** Xe **{winner}** về nhất!\n💰 Nhận: `+{win_amt:,}đ`"
+    else:
+        res_text = f"💀 **THẤT BẠI!** Xe **{winner}** đã thắng cuộc."
+
+    await ctx.bot.send_message(uid, f"{res_text}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
+
 async def play_dice_animation(update: Update, choice_code, amount):
     uid = update.effective_user.id
     if not sub_money(uid, amount, f"Cược {choice_code}"):
         return await update.message.reply_text("❌ Bạn không đủ số dư.")
 
-    # Nâng cấp 3 xúc xắc
     d1, d2, d3 = random.randint(1, 6), random.randint(1, 6), random.randint(1, 6)
     total = d1 + d2 + d3
     msg_wait = await update.message.reply_text("🎲 Đang lắc xúc xắc...")
@@ -345,7 +380,6 @@ async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
     
-    # Kiểm tra xem đã liên kết chưa
     u_bank = query("SELECT bank FROM users WHERE user_id=?", (uid,)).fetchone()
     if u_bank and u_bank[0] is not None:
         return await update.message.reply_text("❌ Bạn đã liên kết ngân hàng rồi. Để thay đổi, vui lòng liên hệ Admin!", parse_mode="Markdown")
@@ -414,7 +448,6 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_reply = update.message
     parts = txt.split()
 
-    # Xử lý cược nhanh qua tin nhắn tay
     if len(parts) == 2 and parts[1].isdigit():
         code, amt = parts[0].upper(), int(parts[1])
         if code in ["XXC", "XXL", "XXX", "XXT"]: return await play_dice_animation(update, code, amt)
@@ -444,7 +477,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif txt == "🎮 Danh sách game":
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx")],
-            [InlineKeyboardButton("💣 DÒ MÌN", callback_data="menu_mines")], # Chèn thêm nút Dò Mìn
+            [InlineKeyboardButton("🏎️ ĐUA XE (RACE)", callback_data="menu_race")],
+            [InlineKeyboardButton("💣 DÒ MÌN", callback_data="menu_mines")],
             [InlineKeyboardButton("⚽️ BÓNG ĐÁ (PENALTY)", callback_data="menu_ball")],
             [InlineKeyboardButton("🎰 SLOT / 🏀 BÓNG RỔ", callback_data="menu_others")]
         ])
@@ -512,7 +546,33 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ctx.bot.send_message(u_id, "❌ Yêu cầu rút tiền bị từ chối. Tiền đã được hoàn lại.")
             await q.edit_message_text(f"❌ TỪ CHỐI ID {u_id}")
 
-    # Menu Dò Mìn (Chèn thêm)
+    # Menu Đua Xe (Mới chèn)
+    elif d == "menu_race":
+        kb = []
+        row = []
+        for i, a in enumerate(amounts):
+            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"prep_race_{a}"))
+            if (i + 1) % 4 == 0: kb.append(row); row = []
+        await q.edit_message_text("🏎️ **ĐUA XE SIÊU CẤP**\nVui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("prep_race_"):
+        amt = int(d.split("_")[2])
+        kb = [
+            [InlineKeyboardButton("🏎️ XE A", callback_data=f"start_race_A_{amt}"), 
+             InlineKeyboardButton("🏎️ XE B", callback_data=f"start_race_B_{amt}")],
+            [InlineKeyboardButton("🔙 Quay lại", callback_data="menu_race")]
+        ]
+        await q.edit_message_text(f"🏎️ **ĐUA XE**\n💰 Cược: `{amt:,}đ`\n👇 Chọn xe bạn tin là sẽ thắng:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("start_race_"):
+        parts = d.split("_")
+        choice, amt = parts[2], int(parts[3])
+        if not sub_money(uid, amt, f"Cược Đua xe {choice}"):
+            return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
+        await q.delete_message()
+        await play_car_race(update, ctx, choice, amt)
+
+    # Menu Dò Mìn
     elif d == "menu_mines":
         kb = []
         row = []
@@ -617,7 +677,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             msg_ball = await ctx.bot.send_dice(uid, emoji="⚽️")
             val = msg_ball.dice.value
             await asyncio.sleep(3.5)
-            win = (val >= 3) # Emoji bóng đá 3,4,5 là vào
+            win = (val >= 3)
             if win: add_money(uid, int(amt*1.95), "Thắng Penalty")
             status = f"⚽️ **VÀOOO!** | +{int(amt*1.95):,}đ" if win else "❌ **HỤT RỒI!**"
             await ctx.bot.send_message(uid, f"{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
@@ -649,4 +709,3 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG VỚI ĐẦY ĐỦ TÍNH NĂNG!")
 app.run_polling()
-
