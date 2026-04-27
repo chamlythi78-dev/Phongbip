@@ -104,7 +104,6 @@ async def force_join(update):
 
 # ===== LOGIC GAMES ANIMATION =====
 
-# --- TRÒ CHƠI ĐUA XE (MỚI CHÈN) ---
 async def play_car_race(update: Update, ctx: ContextTypes.DEFAULT_TYPE, choice, amt):
     uid = update.effective_user.id
     track_length = 12
@@ -144,10 +143,13 @@ async def play_dice_animation(update: Update, choice_code, amount):
     if not sub_money(uid, amount, f"Cược {choice_code}"):
         return await update.message.reply_text("❌ Bạn không đủ số dư.")
 
-    d1, d2, d3 = random.randint(1, 6), random.randint(1, 6), random.randint(1, 6)
-    total = d1 + d2 + d3
-    msg_wait = await update.message.reply_text("🎲 Đang lắc xúc xắc...")
-    await asyncio.sleep(1.5)
+    msg_status = await update.message.reply_text("🎲 **ĐANG LẮC XÚC XẮC...**", parse_mode="Markdown")
+    tasks = [update.message.reply_dice(emoji="🎲") for _ in range(3)]
+    dice_messages = await asyncio.gather(*tasks)
+    
+    results = [m.dice.value for m in dice_messages]
+    total = sum(results)
+    await asyncio.sleep(4)
 
     is_chan, is_tai = (total % 2 == 0), (total >= 11)
     win = False
@@ -161,7 +163,8 @@ async def play_dice_animation(update: Update, choice_code, amount):
         status = f"✅ **THẮNG** | Nhận: `+{win_amt:,}đ`"
     else: status = f"❌ **THUA**"
     
-    await msg_wait.edit_text(f"🎲 Kết quả: **{d1}-{d2}-{d3}** => **{total}**\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
+    res_str = "-".join(map(str, results))
+    await msg_status.edit_text(f"🎲 Kết quả: **{res_str}** => **{total}**\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
 
 async def play_emoji_game(update: Update, game_type, amount):
     uid = update.effective_user.id
@@ -209,6 +212,39 @@ async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🎉 **NHẬN QUÀ THÀNH CÔNG!**\n\n💰 Bạn nhận được: `+{reward:,}đ`", parse_mode="Markdown")
 
 # ===== ADMIN COMMANDS =====
+
+async def nap_tien_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    try:
+        target_id = int(ctx.args[0])
+        amount = int(ctx.args[1])
+        
+        # Cộng tiền và lưu lịch sử
+        add_money(target_id, amount, f"Admin nạp tiền")
+        
+        # Thông báo cho Admin
+        await update.message.reply_text(
+            f"✅ **NẠP TIỀN THÀNH CÔNG**\n\n👤 ID: `{target_id}`\n💰 Số tiền: `+{amount:,}đ`",
+            parse_mode="Markdown"
+        )
+        
+        # Gửi thông báo cho Người dùng
+        bill = (
+            f"💳 **BIẾN ĐỘNG SỐ DƯ**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Tài khoản của bạn vừa nhận được tiền từ hệ thống.\n\n"
+            f"📥 **Số tiền:** `+{amount:,}đ`\n"
+            f"📝 **Nội dung:** Nạp tiền hệ thống\n"
+            f"⏰ **Thời gian:** {datetime.now().strftime('%H:%M - %d/%m/%Y')}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 Số dư hiện tại: `{get_balance(target_id):,}đ`"
+        )
+        try:
+            await ctx.bot.send_message(chat_id=target_id, text=bill, parse_mode="Markdown")
+        except: pass
+    except:
+        await update.message.reply_text("❌ Cú pháp: `/nap [ID] [Số tiền]`")
+
 async def reset_bank(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
@@ -350,7 +386,6 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if is_banned(uid): return
     get_user(uid)
 
-    # Xử lý hệ thống giới thiệu (Ref)
     if ctx.args:
         try:
             ref = int(ctx.args[0])
@@ -363,12 +398,10 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         query("UPDATE users SET refed=1 WHERE user_id=?", (uid,))
         except: pass
 
-    # Kiểm tra tham gia nhóm bắt buộc
     if not await joined(uid, ctx.bot):
         await force_join(update)
         return
 
-    # Menu bàn phím chính
     menu = ReplyKeyboardMarkup([
         ["🎮 Danh sách game", "👤 Tài khoản"],
         ["💳 Nạp tiền", "🛒 Rút tiền"],
@@ -376,7 +409,6 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ["📜 Lịch sử", "📞 Hỗ trợ"]
     ], resize_keyboard=True)
 
-    # Nội dung chào mừng - LỰA CHỌN 1
     welcome_text = (
         f"👋 **CHÀO MỪNG {update.effective_user.first_name.upper()} ĐÃ THAM GIA!**\n\n"
         f"Hệ thống trò chơi minh bạch — uy tín hàng đầu.\n"
@@ -551,7 +583,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     amounts = [1000, 5000, 10000, 50000, 100000, 200000, 500000, 1000000]
 
-    # Duyệt rút tiền
     if d.startswith(("ok_", "no_")):
         if uid != ADMIN_ID: return
         act, u_id, amt = d.split("_")
@@ -564,7 +595,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ctx.bot.send_message(u_id, "❌ Yêu cầu rút tiền bị từ chối. Tiền đã được hoàn lại.")
             await q.edit_message_text(f"❌ TỪ CHỐI ID {u_id}")
 
-    # Menu Đua Xe
     elif d == "menu_race":
         kb = []
         row = []
@@ -590,7 +620,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.delete_message()
         await play_car_race(update, ctx, choice, amt)
 
-    # Menu Dò Mìn
     elif d == "menu_mines":
         kb = []
         row = []
@@ -607,7 +636,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif d.startswith("start_mines_"):
         amt = int(d.split("_")[2])
         if not sub_money(uid, amt, "Cược Dò Mìn"): return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
-        grid = [0]*12 + [1]*3 # 12 ô an toàn, 3 ô mìn
+        grid = [0]*12 + [1]*3 
         random.shuffle(grid)
         ctx.user_data[f"mine_{uid}"] = {"grid": grid, "bet": amt, "opened": [], "mult": 1.4}
         
@@ -624,14 +653,13 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         idx = int(d.split("_")[2])
         if idx in game["opened"]: return
 
-        if game["grid"][idx] == 1: # TRÚNG MÌN
+        if game["grid"][idx] == 1: 
             del ctx.user_data[f"mine_{uid}"]
             await q.edit_message_text(f"💥 **BÙM!!!**\nBạn đã dẫm phải mìn rồi.\n💀 Mất: `{game['bet']:,}đ`", parse_mode="Markdown")
-        else: # AN TOÀN
+        else: 
             game["opened"].append(idx)
             current_win = int(game["bet"] * game["mult"])
             game["mult"] += 0.4
-            
             kb = []
             row = []
             for i in range(15):
@@ -647,7 +675,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if f"mine_{uid}" in ctx.user_data: del ctx.user_data[f"mine_{uid}"]
         await q.edit_message_text(f"🎉 **CHÚC MỪNG!**\nBạn đã chốt lời thành công: `+{amt:,}đ`\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
 
-    # Menu Game cũ
     elif d == "menu_tx" or d == "menu_ball":
         g_type = "tx" if "tx" in d else "ball"
         kb = []
@@ -661,7 +688,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif d == "menu_others":
         await q.edit_message_text("🎮 **TRÒ CHƠI KHÁC**\nNhập cú pháp tay để chơi:\n- `SLOT [Tiền]`\n- `RÔ [Tiền]`\n- `BALL [Tiền]`", parse_mode="Markdown")
 
-    # Chọn cửa đặt
     elif d.startswith("set_"):
         _, game, amt = d.split("_")
         if game == "tx":
@@ -672,33 +698,76 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                    InlineKeyboardButton("➡️ PHẢI", callback_data=f"p_ba_3_{amt}")]]
         await q.edit_message_text(f"💰 Cược: **{int(amt):,}đ**\n👇 Chọn hướng sút/cửa đặt:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-    # Thực hiện chơi
     elif d.startswith("p_"):
         _, game, choice, amt = d.split("_")
         amt = int(amt)
         if get_balance(uid) < amt: return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
         
-        sub_money(uid, amt, f"Cược {game}")
-
-        if game == "tx":
-            d1, d2, d3 = random.randint(1,6), random.randint(1,6), random.randint(1,6)
-            total = d1+d2+d3
-            res = "tai" if total >= 11 else "xiu"
-            win = (choice == res)
-            msg_dice = await ctx.bot.send_message(uid, "🎲 Đang lắc...")
-            await asyncio.sleep(1.5)
-            if win: add_money(uid, int(amt*1.95), "Thắng TX")
-            status = f"🎉 **THẮNG** | +{int(amt*1.95):,}đ" if win else "💀 **THUA**"
-            await msg_dice.edit_text(f"🎲 KQ: **{d1}-{d2}-{d3}** => **{total}** ({res.upper()})\n{status}\n💰 Dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
-
-        elif game == "ba":
+        # --- PHẦN SỬA LẠI GAME PENALTY (BÓNG ĐÁ) ---
+        if game == "ba":
+            # Trừ tiền trước khi chơi
+            sub_money(uid, amt, f"Cược Penalty")
+            
+            # Hướng thủ môn bay ngẫu nhiên (1, 2, 3)
+            goalie_direction = random.randint(1, 3)
+            player_choice = int(choice)
+            directions_text = {1: "TRÁI", 2: "GIỮA", 3: "PHẢI"}
+            
+            # Gửi hiệu ứng sút bóng
             msg_ball = await ctx.bot.send_dice(uid, emoji="⚽️")
-            val = msg_ball.dice.value
             await asyncio.sleep(3.5)
-            win = (val >= 3)
-            if win: add_money(uid, int(amt*1.95), "Thắng Penalty")
-            status = f"⚽️ **VÀOOO!** | +{int(amt*1.95):,}đ" if win else "❌ **HỤT RỒI!**"
+            
+            # Kiểm tra kết quả
+            if player_choice == goalie_direction:
+                # Thua: Thủ môn bắt trúng
+                win = False
+                result_detail = f"🧤 Thủ môn đã bay người sang **{directions_text[goalie_direction]}** và bắt gọn bóng!"
+            else:
+                # Thắng: Thủ môn đoán sai
+                win = True
+                result_detail = f"🥅 Thủ môn bay sang **{directions_text[goalie_direction]}** nhưng bạn sút vào **{directions_text[player_choice]}**!"
+
+            if win:
+                win_amt = int(amt * 1.95)
+                add_money(uid, win_amt, "Thắng Penalty")
+                status = f"⚽️ **VÀOOO!!!**\n{result_detail}\n💰 Nhận: `+{win_amt:,}đ`"
+            else:
+                status = f"❌ **KHÔNG VÀO!**\n{result_detail}\n💀 Bạn đã mất tiền cược."
+
             await ctx.bot.send_message(uid, f"{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
+            return # Thoát sớm để không chạy code bên dưới
+
+        # --- LOGIC TÀI XỈU (GIỮ NGUYÊN) ---
+        if game == "tx":
+            sub_money(uid, amt, f"Cược {game}")
+            msg_status = await ctx.bot.send_message(uid, "🎲 **ĐANG LẮC XÚC XẮC...**", parse_mode="Markdown")
+            tasks = [ctx.bot.send_dice(uid, emoji="🎲") for _ in range(3)]
+            dice_messages = await asyncio.gather(*tasks)
+            
+            results = [m.dice.value for m in dice_messages]
+            total = sum(results)
+            await asyncio.sleep(4)
+            
+            res_type = "tai" if total >= 11 else "xiu"
+            win = (choice == res_type)
+            
+            if win:
+                win_amt = int(amt * 1.95)
+                add_money(uid, win_amt, f"Thắng Tài Xỉu {res_type.upper()}")
+                status = f"🎉 **THẮNG** | Nhận: `+{win_amt:,}đ`"
+            else:
+                status = f"❌ **THUA** | Chúc may mắn lần sau!"
+            
+            res_str = "-".join(map(str, results))
+            await msg_status.edit_text(
+                f"📊 **KẾT QUẢ TÀI XỈU**\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎲 Xúc xắc: **{res_str}**\n"
+                f"🏆 Tổng điểm: **{total}** ({res_type.upper()})\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"{status}\n"
+                f"💰 Số dư: `{get_balance(uid):,}đ`"
+            , parse_mode="Markdown")
 
 # ===== KHỞI CHẠY BOT =====
 app = ApplicationBuilder().token(TOKEN).build()
@@ -721,10 +790,10 @@ app.add_handler(CommandHandler("send", broadcast))
 app.add_handler(CommandHandler("rep", reply_user))
 app.add_handler(CommandHandler("check", check_user_history))
 app.add_handler(CommandHandler("info", admin_info)) 
+app.add_handler(CommandHandler("nap", nap_tien_admin))
 
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG VỚI ĐẦY ĐỦ TÍNH NĂNG!")
 app.run_polling()
-
