@@ -526,11 +526,12 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     elif txt == "🎮 Danh sách game":
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx")],
-            [InlineKeyboardButton("🏎️ ĐUA XE (RACE)", callback_data="menu_race")],
-            [InlineKeyboardButton("💣 DÒ MÌN", callback_data="menu_mines")],
-            [InlineKeyboardButton("⚽️ BÓNG ĐÁ (PENALTY)", callback_data="menu_ball")],
-            [InlineKeyboardButton("🎰 SLOT / 🏀 BÓNG RỔ", callback_data="menu_others")]
+            [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx"), 
+             InlineKeyboardButton("✈️ MÁY BAY (CRASH)", callback_data="menu_plane")],
+            [InlineKeyboardButton("🏎️ ĐUA XE (RACE)", callback_data="menu_race"), 
+             InlineKeyboardButton("💣 DÒ MÌN", callback_data="menu_mines")],
+            [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
+             InlineKeyboardButton("🎰 SLOT / 🏀 KHÁC", callback_data="menu_others")]
         ])
         await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
 
@@ -703,27 +704,19 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         amt = int(amt)
         if get_balance(uid) < amt: return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
         
-        # --- PHẦN SỬA LẠI GAME PENALTY (BÓNG ĐÁ) ---
+        # --- PHẦN GAME PENALTY ---
         if game == "ba":
-            # Trừ tiền trước khi chơi
             sub_money(uid, amt, f"Cược Penalty")
-            
-            # Hướng thủ môn bay ngẫu nhiên (1, 2, 3)
             goalie_direction = random.randint(1, 3)
             player_choice = int(choice)
             directions_text = {1: "TRÁI", 2: "GIỮA", 3: "PHẢI"}
-            
-            # Gửi hiệu ứng sút bóng
             msg_ball = await ctx.bot.send_dice(uid, emoji="⚽️")
             await asyncio.sleep(3.5)
             
-            # Kiểm tra kết quả
             if player_choice == goalie_direction:
-                # Thua: Thủ môn bắt trúng
                 win = False
                 result_detail = f"🧤 Thủ môn đã bay người sang **{directions_text[goalie_direction]}** và bắt gọn bóng!"
             else:
-                # Thắng: Thủ môn đoán sai
                 win = True
                 result_detail = f"🥅 Thủ môn bay sang **{directions_text[goalie_direction]}** nhưng bạn sút vào **{directions_text[player_choice]}**!"
 
@@ -733,41 +726,94 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 status = f"⚽️ **VÀOOO!!!**\n{result_detail}\n💰 Nhận: `+{win_amt:,}đ`"
             else:
                 status = f"❌ **KHÔNG VÀO!**\n{result_detail}\n💀 Bạn đã mất tiền cược."
-
             await ctx.bot.send_message(uid, f"{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
-            return # Thoát sớm để không chạy code bên dưới
+            return
 
-        # --- LOGIC TÀI XỈU (GIỮ NGUYÊN) ---
+        # --- LOGIC TÀI XỈU ---
         if game == "tx":
             sub_money(uid, amt, f"Cược {game}")
             msg_status = await ctx.bot.send_message(uid, "🎲 **ĐANG LẮC XÚC XẮC...**", parse_mode="Markdown")
             tasks = [ctx.bot.send_dice(uid, emoji="🎲") for _ in range(3)]
             dice_messages = await asyncio.gather(*tasks)
-            
             results = [m.dice.value for m in dice_messages]
             total = sum(results)
             await asyncio.sleep(4)
-            
             res_type = "tai" if total >= 11 else "xiu"
             win = (choice == res_type)
-            
             if win:
                 win_amt = int(amt * 1.95)
                 add_money(uid, win_amt, f"Thắng Tài Xỉu {res_type.upper()}")
                 status = f"🎉 **THẮNG** | Nhận: `+{win_amt:,}đ`"
             else:
                 status = f"❌ **THUA** | Chúc may mắn lần sau!"
-            
             res_str = "-".join(map(str, results))
             await msg_status.edit_text(
-                f"📊 **KẾT QUẢ TÀI XỈU**\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🎲 Xúc xắc: **{res_str}**\n"
-                f"🏆 Tổng điểm: **{total}** ({res_type.upper()})\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"{status}\n"
-                f"💰 Số dư: `{get_balance(uid):,}đ`"
+                f"📊 **KẾT QUẢ TÀI XỈU**\n━━━━━━━━━━━━━━━━━━━━━\n🎲 Xúc xắc: **{res_str}**\n🏆 Tổng điểm: **{total}** ({res_type.upper()})\n━━━━━━━━━━━━━━━━━━━━━\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`"
             , parse_mode="Markdown")
+
+    # ===== GAME MÁY BAY (CRASH) =====
+    elif d == "menu_plane":
+        kb = []
+        row = []
+        for i, a in enumerate(amounts):
+            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"prep_plane_{a}"))
+            if (i + 1) % 4 == 0: kb.append(row); row = []
+        await q.edit_message_text("✈️ **MÁY BAY CẤT CÁNH (CRASH)**\nVui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("prep_plane_"):
+        amt = int(d.split("_")[2])
+        kb = [[InlineKeyboardButton("🚀 CẤT CÁNH NGAY", callback_data=f"start_plane_{amt}")],
+              [InlineKeyboardButton("🔙 Quay lại", callback_data="menu_plane")]]
+        await q.edit_message_text(f"✈️ **MÁY BAY**\n💰 Cược: `{amt:,}đ`\n\n*Nhấn nút Rút Tiền trước khi máy bay nổ để nhận thưởng!*", 
+                                  reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("start_plane_"):
+        amt = int(d.split("_")[2])
+        if not sub_money(uid, amt, "Cược Máy Bay"): 
+            return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
+
+        crash_point = round(random.uniform(1.05, 12.0), 2)
+        current_mult = 1.00
+        game_id = f"pl_{uid}_{random.randint(100,999)}"
+        ctx.user_data[game_id] = {"status": "flying", "amt": amt}
+        
+        msg = await q.edit_message_text(f"✈️ Máy bay đang cất cánh... \n📈 Hệ số: **x1.00**", 
+                                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💰 RÚT TIỀN (x1.00)", callback_data=f"claim_plane_{game_id}_1.00")]]))
+
+        while current_mult < 100.0:
+            if ctx.user_data.get(game_id, {}).get("status") != "flying":
+                break 
+
+            if current_mult < 1.10: current_mult += 0.01
+            elif current_mult < 10.0: current_mult += 0.10
+            else: current_mult += 1.0
+
+            current_mult = round(current_mult, 2)
+
+            if current_mult >= crash_point:
+                ctx.user_data[game_id]["status"] = "crashed"
+                await msg.edit_text(f"💥 **BÙM!!!**\n\nMáy bay đã nổ ở **x{current_mult}**\n💀 Bạn mất `{amt:,}đ`", parse_mode="Markdown")
+                del ctx.user_data[game_id]
+                break
+
+            kb = [[InlineKeyboardButton(f"💰 RÚT TIỀN (x{current_mult:.2f})", callback_data=f"clm_pl_{game_id}_{current_mult}")]]
+            try:
+                await msg.edit_text(f"🚀 **MÁY BAY ĐANG BAY**\n\n📈 Hệ số: **x{current_mult:.2f}**\n💰 Tiền thắng: `{(int(amt*current_mult)):,}đ`", 
+                                    reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+            except: pass 
+            await asyncio.sleep(0.7)
+
+    elif d.startswith("clm_pl_"):
+        parts = d.split("_")
+        game_id = f"{parts[2]}_{parts[3]}_{parts[4]}"
+        mult = float(parts[5])
+        game_data = ctx.user_data.get(game_id)
+        if game_data and game_data["status"] == "flying":
+            game_data["status"] = "claimed"
+            win_amt = int(game_data["amt"] * mult)
+            add_money(uid, win_amt, f"Thắng Máy bay x{mult}")
+            await q.edit_message_text(f"🎉 **RÚT TIỀN THÀNH CÔNG!**\n\n🚀 Bạn đã nhảy dù ở **x{mult:.2f}**\n💰 Nhận được: `+{win_amt:,}đ`", parse_mode="Markdown")
+            if game_id in ctx.user_data: del ctx.user_data[game_id]
 
 # ===== KHỞI CHẠY BOT =====
 app = ApplicationBuilder().token(TOKEN).build()
@@ -795,5 +841,6 @@ app.add_handler(CommandHandler("nap", nap_tien_admin))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG VỚI ĐẦY ĐỦ TÍNH NĂNG!")
+print("BOT ĐÃ SẴN SÀNG VỚI GAME MÁY BAY!")
 app.run_polling()
+
