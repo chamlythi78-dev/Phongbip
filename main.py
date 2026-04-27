@@ -18,6 +18,9 @@ GROUP_LINKS = ["https://t.me/thanhall"]
 BOT_USERNAME = "vuavipluxurybot" 
 MIN_WITHDRAW = 100000
 
+# Trạng thái hoạt động của Bot (Mặc định: Bật)
+BOT_STATUS = True
+
 # THÔNG TIN NẠP TIỀN
 BANK_INFO = """
 🏦 **THÔNG TIN NẠP TIỀN**
@@ -213,6 +216,21 @@ async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ===== ADMIN COMMANDS =====
 
+# CHỨC NĂNG 1: BẬT/TẮT BOT
+async def toggle_bot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    global BOT_STATUS
+    if not ctx.args:
+        return await update.message.reply_text(f"🤖 Trạng thái Bot: {'ĐANG BẬT' if BOT_STATUS else 'ĐANG TẮT'}\n👉 Dùng `/bot on` hoặc `/bot off`")
+    
+    arg = ctx.args[0].lower()
+    if arg == "on":
+        BOT_STATUS = True
+        await update.message.reply_text("✅ Bot đã được BẬT. Người dùng có thể sử dụng bình thường.")
+    elif arg == "off":
+        BOT_STATUS = False
+        await update.message.reply_text("🛑 Bot đã được TẮT. Người dùng sẽ không thể thao tác.")
+
 async def nap_tien_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
@@ -331,6 +349,23 @@ async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     msg = "👥 **DANH SÁCH USER (50 gần nhất):**\n\n" + "\n".join([f"`{u[0]}`" for u in users])
     await update.message.reply_text(msg or "Chưa có user nào.", parse_mode="Markdown")
 
+# CHỨC NĂNG 2: XEM LỊCH SỬ KHÔNG GIỚI HẠN
+async def history_full_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    data = query("SELECT * FROM history ORDER BY rowid DESC").fetchall()
+    if not data:
+        return await update.message.reply_text("📭 Hệ thống chưa có giao dịch nào.")
+    
+    msg = "🌐 **TOÀN BỘ LỊCH SỬ GIAO DỊCH (KHÔNG GIỚI HẠN):**\n\n"
+    for d in data:
+        line = f"👤 `{d[0]}` | `{d[1]:,}đ` | {d[2]} | _{d[3][:16]}_\n"
+        if len(msg) + len(line) > 4000:
+            await update.message.reply_text(msg, parse_mode="Markdown")
+            msg = ""
+        msg += line
+    if msg:
+        await update.message.reply_text(msg, parse_mode="Markdown")
+
 async def history_all_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     data = query("SELECT * FROM history ORDER BY rowid DESC LIMIT 20").fetchall()
@@ -382,6 +417,9 @@ async def check_user_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ===== START & REF SYSTEM =====
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not BOT_STATUS and update.effective_user.id != ADMIN_ID:
+        return await update.message.reply_text("🛑 Hệ thống đang bảo trì. Vui lòng quay lại sau!")
+        
     uid = update.effective_user.id
     if is_banned(uid): return
     get_user(uid)
@@ -427,6 +465,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ===== LỆNH LIÊN KẾT =====
 async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not BOT_STATUS and update.effective_user.id != ADMIN_ID: return
     uid = update.effective_user.id
     if is_banned(uid): return
     
@@ -446,6 +485,7 @@ async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ===== RÚT TIỀN =====
 async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not BOT_STATUS and update.effective_user.id != ADMIN_ID: return
     uid = update.effective_user.id
     if is_banned(uid): return
     
@@ -489,6 +529,7 @@ async def history_pro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ===== HANDLE MENU MESSAGES =====
 async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not BOT_STATUS and update.effective_user.id != ADMIN_ID: return
     uid, txt = update.effective_user.id, update.message.text
     if not txt or is_banned(uid): return
     if not await joined(uid, ctx.bot):
@@ -578,6 +619,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ===== CALLBACK HANDLER (GAMES & WITHDRAW) =====
 async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not BOT_STATUS and update.effective_user.id != ADMIN_ID: return
     q = update.callback_query
     d = q.data
     uid = q.from_user.id
@@ -897,9 +939,12 @@ app.add_handler(CommandHandler("check", check_user_history))
 app.add_handler(CommandHandler("info", admin_info)) 
 app.add_handler(CommandHandler("nap", nap_tien_admin))
 
+# Đăng ký 2 lệnh mới
+app.add_handler(CommandHandler("bot", toggle_bot))
+app.add_handler(CommandHandler("historyfull", history_full_admin))
+
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG VỚI GAME GÕ MỎ VÀ MÁY BAY!")
+print("BOT ĐÃ SẴN SÀNG VỚI CÁC TÍNH NĂNG ADMIN MỚI!")
 app.run_polling()
-
