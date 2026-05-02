@@ -31,7 +31,6 @@ BANK_INFO = """
 --------------------------
 ⚠️ *Lưu ý: Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
 """
-*NẠP 100K NHẬN 135K X3VC ALLGAME LH ADM ĐỂ NHẬN THƯỞNG """
 
 # ===== DATABASE SETUP =====
 conn = sqlite3.connect("bot.db", check_same_thread=False)
