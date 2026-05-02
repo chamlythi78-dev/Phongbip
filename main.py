@@ -535,7 +535,26 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_reply = update.message
     parts = txt.split()
 
-    # XỬ LÝ NÚT NHẬN CODE FREE
+    # --- ƯU TIÊN KIỂM TRA CÁC NÚT MENU TRƯỚC ---
+    if txt == "👤 Tài khoản":
+        u = query("SELECT balance, bank, stk, name, refs FROM users WHERE user_id=?", (uid,)).fetchone()
+        if not u: # Đảm bảo user tồn tại trong DB
+            get_user(uid)
+            u = (0, None, None, None, 0)
+        msg = (
+            f"👤 **THÔNG TIN TÀI KHOẢN**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🆔 ID: `{uid}`\n"
+            f"💰 Số dư: `{u[0]:,}đ`\n"
+            f"👥 Đã mời: `{u[4]}` người\n"
+            f"🏛 Ngân hàng: `{u[1] or 'Chưa liên kết'}`\n"
+            f"💳 STK: `{u[2] or 'Chưa liên kết'}`\n"
+            f"👤 Tên: `{u[3] or 'Chưa liên kết'}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 *Sử dụng lệnh /lienket để cập nhật thông tin rút tiền!*"
+        )
+        return await user_reply.reply_text(msg, parse_mode="Markdown")
+
     if txt == "🎁 Nhận Code Free":
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("📺 THAM GIA NHÓM NHẬN CODE", url="https://t.me/vuatelevision")],
@@ -551,6 +570,57 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True)
 
+    if txt == "💳 Nạp tiền":
+        if check_mt('mt_nap') and uid not in ADMIN_IDS:
+            return await user_reply.reply_text("⚙️ Hệ thống Nạp Tiền đang bảo trì!")
+        return await user_reply.reply_text(BANK_INFO.format(uid=uid), parse_mode="Markdown")
+
+    if txt == "🎮 Danh sách game":
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx")],
+            [InlineKeyboardButton("🏎️ ĐUA XE (RACE)", callback_data="menu_race"), 
+             InlineKeyboardButton("💣 DÒ MÌN", callback_data="menu_mines")],
+            [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
+             InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
+            [InlineKeyboardButton("🎰 SLOT / 🏀 KHÁC", callback_data="menu_others")]
+        ])
+        return await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
+
+    if txt == "🛒 Rút tiền":
+        if check_mt('mt_rut') and uid not in ADMIN_IDS:
+            return await user_reply.reply_text("⚙️ Hệ thống Rút Tiền đang bảo trì!")
+        u = query("SELECT bank, stk, name FROM users WHERE user_id=?", (uid,)).fetchone()
+        if not u or not u[0] or not u[1]:
+            await user_reply.reply_text("❌ Bạn chưa liên kết bank.\n👉 Dùng lệnh: `/lienket [Bank] [STK] [Tên]`", parse_mode="Markdown")
+        else:
+            await user_reply.reply_text(f"🏛 **TÀI KHOẢN RÚT:**\n🏛 Bank: {u[0]}\n💳 STK: `{u[1]}`\n👤 Tên: {u[2]}\n\n👉 Nhập: `/rut [số tiền]`", parse_mode="Markdown")
+        return
+
+    if txt == "🎁 Checkin":
+        today = str(datetime.now().date())
+        res = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()
+        if res and res[0] == today:
+            await user_reply.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
+            return
+        add_money(uid,3000, "Daily Checkin")
+        query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
+        return await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+3000đ`", parse_mode="Markdown")
+
+    if txt == "📧 Mời bạn":
+        msg = (
+            "🚀 **KIẾM TIỀN TỪ LƯỢT MỜI**\n\n"
+            "💵 1F = `2,000đ`\n"
+            f"🔗 **Link của bạn:**\n`https://t.me/{BOT_USERNAME}?start={uid}`"
+        )
+        return await user_reply.reply_text(msg, parse_mode="Markdown")
+
+    if txt == "📜 Lịch sử":
+        return await history_pro(update, ctx)
+
+    if txt == "📞 Hỗ trợ":
+        return await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! Hoặc NT CHO @cskhzen88uytin")
+
+    # --- LOGIC CƯỢC NHANH ---
     if len(parts) == 2 and parts[1].isdigit():
         code, amt = parts[0].upper(), int(parts[1])
         if code in ["XXC", "XXL", "XXX", "XXT"]:
@@ -564,69 +634,12 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             if code == "BALL": return await play_emoji_game(update, "BALL", amt)
             if code == "RÔ": return await play_emoji_game(update, "RO", amt)
 
-    if txt == "👤 Tài khoản":
-        u = query("SELECT balance, bank, stk, name, refs FROM users WHERE user_id=?", (uid,)).fetchone()
-        msg = (
-            f"👤 **THÔNG TIN TÀI KHOẢN**\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🆔 ID: `{uid}`\n"
-            f"💰 Số dư: `{u[0]:,}đ`\n"
-            f"👥 Đã mời: `{u[4]}` người\n"
-            f"🏛 Ngân hàng: `{u[1] or 'Chưa liên kết'}`\n"
-            f"💳 STK: `{u[2] or 'Chưa liên kết'}`\n"
-            f"👤 Tên: `{u[3] or 'Chưa liên kết'}`\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💡 *Sử dụng lệnh /lienket để cập nhật thông tin rút tiền!*"
-        )
-        await user_reply.reply_text(msg, parse_mode="Markdown")
-    elif txt == "💳 Nạp tiền":
-        if check_mt('mt_nap') and uid not in ADMIN_IDS:
-            return await user_reply.reply_text("⚙️ Hệ thống Nạp Tiền đang bảo trì!")
-        await user_reply.reply_text(BANK_INFO.format(uid=uid), parse_mode="Markdown")
-    elif txt == "🎮 Danh sách game":
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx")],
-            [InlineKeyboardButton("🏎️ ĐUA XE (RACE)", callback_data="menu_race"), 
-             InlineKeyboardButton("💣 DÒ MÌN", callback_data="menu_mines")],
-            [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
-             InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
-            [InlineKeyboardButton("🎰 SLOT / 🏀 KHÁC", callback_data="menu_others")]
-        ])
-        await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
-    elif txt == "🛒 Rút tiền":
-        if check_mt('mt_rut') and uid not in ADMIN_IDS:
-            return await user_reply.reply_text("⚙️ Hệ thống Rút Tiền đang bảo trì!")
-        u = query("SELECT bank, stk, name FROM users WHERE user_id=?", (uid,)).fetchone()
-        if not u or not u[0] or not u[1]:
-            await user_reply.reply_text("❌ Bạn chưa liên kết bank.\n👉 Dùng lệnh: `/lienket [Bank] [STK] [Tên]`", parse_mode="Markdown")
-        else:
-            await user_reply.reply_text(f"🏛 **TÀI KHOẢN RÚT:**\n🏛 Bank: {u[0]}\n💳 STK: `{u[1]}`\n👤 Tên: {u[2]}\n\n👉 Nhập: `/rut [số tiền]`", parse_mode="Markdown")
-    elif txt == "🎁 Checkin":
-        today = str(datetime.now().date())
-        res = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()
-        if res and res[0] == today:
-            await user_reply.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
-            return
-        add_money(uid,3000, "Daily Checkin")
-        query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
-        await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+3000đ`", parse_mode="Markdown")
-    elif txt == "📧 Mời bạn":
-        msg = (
-            "🚀 **KIẾM TIỀN TỪ LƯỢT MỜI**\n\n"
-            "💵 1F = `2,000đ`\n"
-            f"🔗 **Link của bạn:**\n`https://t.me/{BOT_USERNAME}?start={uid}`"
-        )
-        await user_reply.reply_text(msg, parse_mode="Markdown")
-    elif txt == "📜 Lịch sử":
-        await history_pro(update, ctx)
-    elif txt == "📞 Hỗ trợ":
-        await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! Hoặc NT CHO @cskhzen88uytin")
-    else:
-        if uid not in ADMIN_IDS:
-            for aid in ADMIN_IDS:
-                try: await ctx.bot.send_message(chat_id=aid, text=f"📨 **TIN NHẮN HỖ TRỢ**\n👤 ID: `{uid}`\n📝 Nội dung: {txt}", parse_mode="Markdown")
-                except: pass
-            await user_reply.reply_text("✅ Đã gửi yêu cầu tới Admin!")
+    # --- CHẾ ĐỘ NHẬN TIN NHẮN HỖ TRỢ ---
+    if uid not in ADMIN_IDS:
+        for aid in ADMIN_IDS:
+            try: await ctx.bot.send_message(chat_id=aid, text=f"📨 **TIN NHẮN HỖ TRỢ**\n👤 ID: `{uid}`\n📝 Nội dung: {txt}", parse_mode="Markdown")
+            except: pass
+        await user_reply.reply_text("✅ Đã gửi yêu cầu tới Admin!")
 
 # ===== CALLBACK HANDLER (GAMES & WITHDRAW) =====
 async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
