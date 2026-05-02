@@ -23,9 +23,9 @@ MIN_WITHDRAW = 100000
 BANK_INFO = """
 🏦 **THÔNG TIN NẠP TIỀN**
 --------------------------
-🏛 Ngân hàng: **BẢO TRÌ**
-👤 CTK: **BẢO TRÌ**
-💳 STK: `BTRI`
+🏛 Ngân hàng: **MBBANK**
+👤 CTK: **PHAM BA QUANG**
+💳 STK: `6038777777 `
 📝 NỘI DUNG CK: `{uid}`
 --------------------------
 ⚠️ *Lưu ý: Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
