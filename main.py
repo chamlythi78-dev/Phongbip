@@ -24,13 +24,14 @@ WIN_RATE = 30  # Tỉ lệ thắng 30%
 BANK_INFO = """
 🏦 **THÔNG TIN NẠP TIỀN**
 --------------------------
-🏛 Ngân hàng: **MBBANK**
-👤 CTK: **PHAM BA QUANG**
-💳 STK: `6038777777 `
+🏛 Ngân hàng: **VPBANK**
+👤 CTK: **TRAN DAI THANG **
+💳 STK: `0343044321  `
 📝 NỘI DUNG CK: `{uid}`
 --------------------------
 ⚠️ *Lưu ý: Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
 """
+*NẠP 100K NHẬN 135K X3VC ALLGAME LH ADM ĐỂ NHẬN THƯỞNG """
 
 # ===== DATABASE SETUP =====
 conn = sqlite3.connect("bot.db", check_same_thread=False)
