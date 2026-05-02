@@ -13,7 +13,7 @@ def gen_code():
 
 # ===== CONFIG =====
 TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_IDS = 7398112999,8619503816 
+ADMIN_ID = 7398112999
 GROUP_IDS = [-1003663678808]
 GROUP_LINKS = ["https://t.me/thanhall"]
 BOT_USERNAME = "vuavipluxurybot" 
