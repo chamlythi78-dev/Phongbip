@@ -14,8 +14,6 @@ def gen_code():
 TOKEN = os.getenv("BOT_TOKEN")
 # Cập nhật danh sách Admin
 ADMIN_IDS = [7398112999, 8619503816]
-GROUP_IDS = [-1003937183875]
-GROUP_LINKS = ["https://t.me/vuatelevision "]
 BOT_USERNAME = "vuavipluxurybot" 
 MIN_WITHDRAW = 100000
 WIN_RATE = 30  # Tỉ lệ thắng 30%
@@ -105,24 +103,6 @@ def sub_money(uid, amt, note="withdraw"):
     query("UPDATE users SET balance=balance-? WHERE user_id=?", (amt, uid))
     query("INSERT INTO history VALUES(?,?,?,?)", (uid, -amt, note, str(datetime.now())))
     return True
-
-# ===== JOIN CHECK =====
-async def joined(uid, bot):
-    for gid in GROUP_IDS:
-        try:
-            m = await bot.get_chat_member(gid, uid)
-            if m.status not in ["left", "kicked"]:
-                return True
-        except: pass
-    return False
-
-async def force_join(update):
-    buttons = [[InlineKeyboardButton(f"📢 Tham Gia Nhóm {i+1}", url=link)] for i, link in enumerate(GROUP_LINKS)]
-    await update.message.reply_text(
-        "⚠️ **BẠN CHƯA THAM GIA NHÓM**\n\nVui lòng tham gia các nhóm dưới đây để kích hoạt tính năng của Bot!",
-        reply_markup=InlineKeyboardMarkup(buttons),
-        parse_mode="Markdown"
-    )
 
 # ===== LOGIC GAMES ANIMATION =====
 
@@ -244,9 +224,6 @@ async def play_emoji_game(update: Update, game_type, amount):
 async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
-    if not await joined(uid, ctx.bot):
-        await force_join(update)
-        return
     if not ctx.args:
         await update.message.reply_text("❌ Vui lòng nhập kèm mã. VD: `/code ABC123`")
         return
@@ -465,15 +442,13 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         query("UPDATE users SET refed=1 WHERE user_id=?", (uid,))
         except: pass
 
-    if not await joined(uid, ctx.bot):
-        await force_join(update)
-        return
-
+    # Cập nhật Menu chính thêm nút Nhận Code Free
     menu = ReplyKeyboardMarkup([
         ["🎮 Danh sách game", "👤 Tài khoản"],
         ["💳 Nạp tiền", "🛒 Rút tiền"],
-        ["🎁 Checkin", "📧 Mời bạn"],
-        ["📜 Lịch sử", "📞 Hỗ trợ"]
+        ["🎁 Checkin", "🎁 Nhận Code Free"],
+        ["📧 Mời bạn", "📜 Lịch sử"],
+        ["📞 Hỗ trợ"]
     ], resize_keyboard=True)
 
     welcome_text = (
@@ -482,12 +457,8 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 **MIN RÚT TIỀN:** `100.000đ`\n"
         f"💳 **MIN NẠP TIỀN:** `10.000đ`\n"
-        f"⚠️ *Lưu ý: Nạp dưới 10k sẽ không được tự động duyệt.*\n\n"
-        f"⚖️ **CAM KẾT MINH BẠCH:**\n"
-        f"• **100%** Kết quả hoàn toàn ngẫu nhiên.\n"
-        f"• 🔄 **KHÔNG** can thiệp kết quả dưới mọi hình thức.\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🚀 Chúc bạn có những trải nghiệm may mắn và thú vị!"
+        f"🚀 Chúc bạn có những trải nghiệm may mắn!"
     )
     await update.message.reply_text(welcome_text, reply_markup=menu, parse_mode="Markdown")
 
@@ -511,7 +482,7 @@ async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
     if check_mt('mt_rut') and uid not in ADMIN_IDS:
-        return await update.message.reply_text("⚙️ Hệ thống Rút Tiền đang bảo trì, vui lòng quay lại sau!")
+        return await update.message.reply_text("⚙️ Hệ thống Rút Tiền đang bảo trì!")
         
     u = query("SELECT bank, stk, name, balance FROM users WHERE user_id=?", (uid,)).fetchone()
     if not u or not u[0] or not u[1]:
@@ -528,7 +499,6 @@ async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("✅ Duyệt", callback_data=f"ok_{uid}_{amount}"),
                 InlineKeyboardButton("❌ Từ chối", callback_data=f"no_{uid}_{amount}")
             ]])
-            # Gửi yêu cầu cho Admin chính đầu tiên
             await ctx.bot.send_message(ADMIN_IDS[0], f"🔔 **YÊU CẦU RÚT TIỀN**\n\n👤 ID: `{uid}`\n💰 `{amount:,}đ`\n🏛 `{bank} | {stk} | {name}`", reply_markup=keyboard, parse_mode="Markdown")
             await update.message.reply_text("✅ Gửi yêu cầu rút tiền thành công! Vui lòng chờ duyệt.")
         else:
@@ -557,9 +527,6 @@ async def history_pro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid, txt = update.effective_user.id, update.message.text
     if not txt or is_banned(uid): return
-    if not await joined(uid, ctx.bot):
-        await force_join(update)
-        return
     user_reply = update.message
     parts = txt.split()
 
@@ -604,7 +571,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
             [InlineKeyboardButton("🎰 SLOT / 🏀 KHÁC", callback_data="menu_others")]
         ])
-        await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
+        await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**", reply_markup=kb, parse_mode="Markdown")
     elif txt == "🛒 Rút tiền":
         if check_mt('mt_rut') and uid not in ADMIN_IDS:
             return await user_reply.reply_text("⚙️ Hệ thống Rút Tiền đang bảo trì!")
@@ -622,6 +589,25 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         add_money(uid,3000, "Daily Checkin")
         query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
         await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+3000đ`", parse_mode="Markdown")
+    
+    # Xử lý nút Nhận Code Free
+    elif txt == "🎁 Nhận Code Free":
+        kb_code = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📺 Nhóm Vua Television", url="https://t.me/vuatelevision")],
+            [InlineKeyboardButton("📢 Kênh Thông Báo", url="https://t.me/thanhall")]
+        ])
+        msg_code = (
+            "🎁 **HƯỚNG DẪN NHẬN GIFTCODE FREE**\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Để nhận mã quà tặng miễn phí, bạn hãy tham gia các nhóm dưới đây nhé:\n\n"
+            "1️⃣ Nhấp vào các nút bên dưới để tham gia nhóm/kênh.\n"
+            "2️⃣ Admin thường xuyên phát Code tại đây.\n"
+            "3️⃣ Sau khi có mã, hãy nhập theo cú pháp:\n"
+            "👉 `/code [mã_của_bạn]`\n\n"
+            "🚀 Chúc bạn may mắn nhận được nhiều phần quà!"
+        )
+        await user_reply.reply_text(msg_code, reply_markup=kb_code, parse_mode="Markdown", disable_web_page_preview=True)
+
     elif txt == "📧 Mời bạn":
         msg = (
             "🚀 **KIẾM TIỀN TỪ LƯỢT MỜI**\n\n"
@@ -632,7 +618,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif txt == "📜 Lịch sử":
         await history_pro(update, ctx)
     elif txt == "📞 Hỗ trợ":
-        await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! Hoặc NT CHO @winner12211")
+        await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm!")
     else:
         if uid not in ADMIN_IDS:
             for aid in ADMIN_IDS:
@@ -640,7 +626,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 except: pass
             await user_reply.reply_text("✅ Đã gửi yêu cầu tới Admin!")
 
-# ===== CALLBACK HANDLER (GAMES & WITHDRAW) =====
+# ===== CALLBACK HANDLER =====
 async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     d = q.data
@@ -651,19 +637,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         key = d.replace("tg_", "")
         new_val = 0 if check_mt(key) else 1
         query("UPDATE settings SET value=? WHERE key=?", (new_val, key))
-        def st(k): return "🔴 OFF" if check_mt(k) else "🟢 ON"
-        new_kb = [
-            [InlineKeyboardButton(f"🎲 Tài Xỉu 3D: {st('mt_taixiu')}", callback_data="tg_mt_taixiu")],
-            [InlineKeyboardButton(f"🏎 Đua Xe: {st('mt_duaxe')}", callback_data="tg_mt_duaxe"), 
-             InlineKeyboardButton(f"💣 Dò Mìn: {st('mt_domin')}", callback_data="tg_mt_domin")],
-            [InlineKeyboardButton(f"⚽ Penalty: {st('mt_penalty')}", callback_data="tg_mt_penalty"), 
-             InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
-            [InlineKeyboardButton(f"🎰 Slot/Khác: {st('mt_slot')}", callback_data="tg_mt_slot")],
-            [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap"), 
-             InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
-            [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
-        ]
-        await q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(new_kb))
         await q.answer("Đã cập nhật trạng thái!")
         return
 
@@ -687,245 +660,123 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(f"❌ TỪ CHỐI ID {u_id}")
 
     elif d == "menu_race":
-        if check_mt('mt_duaxe') and uid not in ADMIN_IDS:
-            return await ctx.bot.send_message(uid, "⚙️ Game Đua Xe đang bảo trì!")
-        kb = []
-        row = []
-        for i, a in enumerate(amounts):
-            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"prep_race_{a}"))
-            if (i + 1) % 4 == 0: kb.append(row); row = []
-        await q.edit_message_text("🏎️ **ĐUA XE SIÊU CẤP**\nVui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        kb = [([InlineKeyboardButton(f"{a//1000}k", callback_data=f"prep_race_{a}") for a in amounts[i:i+4]]) for i in range(0, len(amounts), 4)]
+        await q.edit_message_text("🏎️ Chọn mức cược Đua Xe:", reply_markup=InlineKeyboardMarkup(kb))
 
     elif d.startswith("prep_race_"):
         amt = int(d.split("_")[2])
-        kb = [
-            [InlineKeyboardButton("🏎️ XE A", callback_data=f"start_race_A_{amt}"), 
-             InlineKeyboardButton("🏎️ XE B", callback_data=f"start_race_B_{amt}")],
-            [InlineKeyboardButton("🔙 Quay lại", callback_data="menu_race")]
-        ]
-        await q.edit_message_text(f"🏎️ **ĐUA XE**\n💰 Cược: `{amt:,}đ`\n👇 Chọn xe bạn tin là sẽ thắng:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        kb = [[InlineKeyboardButton("🏎️ XE A", callback_data=f"start_race_A_{amt}"), InlineKeyboardButton("🏎️ XE B", callback_data=f"start_race_B_{amt}")]]
+        await q.edit_message_text(f"🏎️ Cược: `{amt:,}đ`. Chọn xe:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
     elif d.startswith("start_race_"):
-        parts = d.split("_")
-        choice, amt = parts[2], int(parts[3])
-        if not sub_money(uid, amt, f"Cược Đua xe {choice}"):
-            return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
+        _, _, choice, amt = d.split("_")
+        if not sub_money(uid, int(amt), f"Cược Đua xe"): return await ctx.bot.send_message(uid, "❌ Không đủ tiền.")
         await q.delete_message()
-        await play_car_race(update, ctx, choice, amt)
+        await play_car_race(update, ctx, choice, int(amt))
 
     elif d == "menu_mines":
-        if check_mt('mt_domin') and uid not in ADMIN_IDS:
-            return await ctx.bot.send_message(uid, "⚙️ Game Dò Mìn đang bảo trì!")
-        kb = []
-        row = []
-        for i, a in enumerate(amounts):
-            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"prep_mines_{a}"))
-            if (i + 1) % 4 == 0: kb.append(row); row = []
-        await q.edit_message_text("💣 **DÒ MÌN (MINES)**\nVui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-
-    elif d.startswith("prep_mines_"):
-        amt = int(d.split("_")[2])
-        kb = [[InlineKeyboardButton("🚀 BẮT ĐẦU CHƠI", callback_data=f"start_mines_{amt}"), InlineKeyboardButton("🔙 Quay lại", callback_data="menu_mines")]]
-        await q.edit_message_text(f"💣 **DÒ MÌN**\n💰 Cược: `{amt:,}đ`\n⚠️ Có 3 quả mìn ẩn trong 15 ô. Mở ô để nhân tiền!", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        kb = [([InlineKeyboardButton(f"{a//1000}k", callback_data=f"start_mines_{a}") for a in amounts[i:i+4]]) for i in range(0, len(amounts), 4)]
+        await q.edit_message_text("💣 Chọn mức cược Dò Mìn:", reply_markup=InlineKeyboardMarkup(kb))
 
     elif d.startswith("start_mines_"):
         amt = int(d.split("_")[2])
-        if not sub_money(uid, amt, "Cược Dò Mìn"): return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
-        
-        is_win_game = should_win()
+        if not sub_money(uid, amt, "Cược Dò Mìn"): return await ctx.bot.send_message(uid, "❌ Không đủ tiền.")
+        is_win = should_win()
         grid = [0]*12 + [1]*3 
         random.shuffle(grid)
-        
-        ctx.user_data[f"mine_{uid}"] = {"grid": grid, "bet": amt, "opened": [], "mult": 1.4, "must_lose": not is_win_game}
-        kb = []
-        row = []
-        for i in range(15):
-            row.append(InlineKeyboardButton("❓", callback_data=f"play_mine_{i}"))
-            if (i+1) % 3 == 0: kb.append(row); row = []
-        await q.edit_message_text(f"💣 **DÒ MÌN ĐANG DIỄN RA**\n💰 Cược: `{amt:,}đ`\n📈 Hệ số tiếp theo: `x1.4`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        ctx.user_data[f"mine_{uid}"] = {"grid": grid, "bet": amt, "opened": [], "mult": 1.4, "must_lose": not is_win}
+        kb = [([InlineKeyboardButton("❓", callback_data=f"play_mine_{i}") for i in range(j, j+3)]) for j in range(0, 15, 3)]
+        await q.edit_message_text(f"💣 **DÒ MÌN** | Bet: `{amt:,}đ`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
     elif d.startswith("play_mine_"):
         game = ctx.user_data.get(f"mine_{uid}")
         if not game: return
         idx = int(d.split("_")[2])
         if idx in game["opened"]: return
-        
-        if game["must_lose"] and len(game["opened"]) >= random.randint(1, 3):
-            is_bomb = True
-        else:
-            is_bomb = (game["grid"][idx] == 1)
-
-        if is_bomb: 
+        is_bomb = True if (game["must_lose"] and len(game["opened"]) >= random.randint(1,3)) else (game["grid"][idx] == 1)
+        if is_bomb:
             del ctx.user_data[f"mine_{uid}"]
-            await q.edit_message_text(f"💥 **BÙM!!!**\nBạn đã dẫm phải mìn rồi.\n💀 Mất: `{game['bet']:,}đ`", parse_mode="Markdown")
-        else: 
+            await q.edit_message_text(f"💥 **BÙM!** Bạn mất `{game['bet']:,}đ`", parse_mode="Markdown")
+        else:
             game["opened"].append(idx)
-            current_win = int(game["bet"] * game["mult"])
+            win_now = int(game["bet"] * game["mult"])
             game["mult"] += 0.4
-            kb = []
-            row = []
-            for i in range(15):
-                icon = "💎" if i in game["opened"] else "❓"
-                row.append(InlineKeyboardButton(icon, callback_data=f"play_mine_{i}"))
-                if (i+1) % 3 == 0: kb.append(row); row = []
-            kb.append([InlineKeyboardButton(f"💰 CHỐT LỜI: {current_win:,}đ", callback_data=f"claim_mine_{current_win}")])
-            await q.edit_message_text(f"💎 **AN TOÀN!**\n💰 Thưởng hiện tại: `{current_win:,}đ`\n📈 Lượt tới: `x{game['mult']:.1f}`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+            kb = [([InlineKeyboardButton("💎" if i in game["opened"] else "❓", callback_data=f"play_mine_{i}") for i in range(j, j+3)]) for j in range(0, 15, 3)]
+            kb.append([InlineKeyboardButton(f"💰 CHỐT: {win_now:,}đ", callback_data=f"claim_mine_{win_now}")])
+            await q.edit_message_text(f"💎 An toàn! Thưởng: `{win_now:,}đ`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
     elif d.startswith("claim_mine_"):
         amt = int(d.split("_")[2])
         add_money(uid, amt, "Thắng Dò Mìn")
-        if f"mine_{uid}" in ctx.user_data: del ctx.user_data[f"mine_{uid}"]
-        await q.edit_message_text(f"🎉 **CHÚC MỪNG!**\nBạn đã chốt lời thành công: `+{amt:,}đ`\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
+        del ctx.user_data[f"mine_{uid}"]
+        await q.edit_message_text(f"🎉 Chốt lãi: `+{amt:,}đ`")
 
-    elif d == "menu_tx" or d == "menu_ball":
-        g_type = "tx" if "tx" in d else "ball"
-        if g_type == "ball" and check_mt('mt_penalty') and uid not in ADMIN_IDS:
-            return await ctx.bot.send_message(uid, "⚙️ Game Penalty đang bảo trì!")
-        if g_type == "tx" and check_mt('mt_taixiu') and uid not in ADMIN_IDS:
-            return await ctx.bot.send_message(uid, "⚙️ Game Tài Xỉu đang bảo trì!")
-            
-        kb = []
-        row = []
-        for i, a in enumerate(amounts):
-            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"set_{g_type}_{a}"))
-            if (i + 1) % 4 == 0: kb.append(row); row = []
-        msg = "🎲 **TÀI XỈU 3D**" if g_type == "tx" else "⚽️ **BÓNG ĐÁ PENALTY**"
-        await q.edit_message_text(f"{msg}\n👇 Chọn mức tiền cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-
-    elif d == "menu_others":
-        if check_mt('mt_slot') and uid not in ADMIN_IDS:
-            return await ctx.bot.send_message(uid, "⚙️ Các trò chơi này đang bảo trì!")
-        await q.edit_message_text("🎮 **TRÒ CHƠI KHÁC**\nNhập cú pháp tay để chơi:\n- `SLOT [Tiền]`\n- `RÔ [Tiền]`\n- `BALL [Tiền]`", parse_mode="Markdown")
+    elif d in ["menu_tx", "menu_ball"]:
+        g = "tx" if "tx" in d else "ba"
+        kb = [([InlineKeyboardButton(f"{a//1000}k", callback_data=f"set_{g}_{a}") for a in amounts[i:i+4]]) for i in range(0, len(amounts), 4)]
+        await q.edit_message_text("💰 Chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb))
 
     elif d.startswith("set_"):
-        _, game, amt = d.split("_")
-        if game == "tx":
-            kb = [[InlineKeyboardButton("🎲 TÀI", callback_data=f"p_tx_tai_{amt}"), InlineKeyboardButton("🎲 XỈU", callback_data=f"p_tx_xiu_{amt}")]]
-        else:
-            kb = [[InlineKeyboardButton("⬅️ TRÁI", callback_data=f"p_ba_1_{amt}"), 
-                   InlineKeyboardButton("⬆️ GIỮA", callback_data=f"p_ba_2_{amt}"), 
-                   InlineKeyboardButton("➡️ PHẢI", callback_data=f"p_ba_3_{amt}")]]
-        await q.edit_message_text(f"💰 Cược: **{int(amt):,}đ**\n👇 Chọn hướng sút/cửa đặt:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        _, g, amt = d.split("_")
+        if g == "tx": kb = [[InlineKeyboardButton("🎲 TÀI", callback_data=f"p_tx_tai_{amt}"), InlineKeyboardButton("🎲 XỈU", callback_data=f"p_tx_xiu_{amt}")]]
+        else: kb = [[InlineKeyboardButton("⬅️", callback_data=f"p_ba_1_{amt}"), InlineKeyboardButton("⬆️", callback_data=f"p_ba_2_{amt}"), InlineKeyboardButton("➡️", callback_data=f"p_ba_3_{amt}")]]
+        await q.edit_message_text(f"💰 Cược {int(amt):,}đ. Chọn cửa:", reply_markup=InlineKeyboardMarkup(kb))
 
     elif d.startswith("p_"):
         _, game, choice, amt = d.split("_")
         amt = int(amt)
-        if get_balance(uid) < amt: return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
-        
+        if not sub_money(uid, amt, f"Cược {game}"): return await ctx.bot.send_message(uid, "❌ Không đủ tiền.")
         if game == "ba":
-            sub_money(uid, amt, f"Cược Penalty")
-            is_win = should_win()
-            player_choice = int(choice)
-            if is_win:
-                goalie_direction = random.choice([d for d in [1, 2, 3] if d != player_choice])
-            else:
-                goalie_direction = player_choice
-
-            directions_text = {1: "TRÁI", 2: "GIỮA", 3: "PHẢI"}
-            msg_ball = await ctx.bot.send_dice(uid, emoji="⚽️")
+            await ctx.bot.send_dice(uid, emoji="⚽️")
             await asyncio.sleep(3.5)
-            
-            if player_choice == goalie_direction:
-                win = False
-                result_detail = f"🧤 Thủ môn đã bay người sang **{directions_text[goalie_direction]}** và bắt gọn bóng!"
-            else:
-                win = True
-                result_detail = f"🥅 Thủ môn bay sang **{directions_text[goalie_direction]}** nhưng bạn sút vào **{directions_text[player_choice]}**!"
-            
-            if win:
-                win_amt = int(amt * 1.95)
-                add_money(uid, win_amt, "Thắng Penalty")
-                status = f"⚽️ **VÀOOO!!!**\n{result_detail}\n💰 Nhận: `+{win_amt:,}đ`"
-            else:
-                status = f"❌ **KHÔNG VÀO!**\n{result_detail}\n💀 Bạn đã mất tiền cược."
-            await ctx.bot.send_message(uid, f"{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
-            return
-
-        if game == "tx":
-            sub_money(uid, amt, f"Cược {game}")
-            msg_status = await ctx.bot.send_message(uid, "🎲 **ĐANG LẮC XÚC XẮC...**", parse_mode="Markdown")
-            
-            d1 = await ctx.bot.send_dice(uid, emoji="🎲")
-            d2 = await ctx.bot.send_dice(uid, emoji="🎲")
-            d3 = await ctx.bot.send_dice(uid, emoji="🎲")
-            
-            results = [d1.dice.value, d2.dice.value, d3.dice.value]
-            total = sum(results)
-            res_type = "tai" if total >= 11 else "xiu"
-            
-            win = (choice == res_type)
-
+            if should_win():
+                win = int(amt*1.95); add_money(uid, win, "Thắng Penalty")
+                await ctx.bot.send_message(uid, f"⚽️ **VÀOOO!** +`{win:,}đ`")
+            else: await ctx.bot.send_message(uid, "❌ Trượt rồi!")
+        elif game == "tx":
+            msg_status = await ctx.bot.send_message(uid, "🎲 **ĐANG LẮC...**")
+            d1 = await ctx.bot.send_dice(uid, emoji="🎲"); d2 = await ctx.bot.send_dice(uid, emoji="🎲"); d3 = await ctx.bot.send_dice(uid, emoji="🎲")
+            total = sum([d1.dice.value, d2.dice.value, d3.dice.value]); res_type = "tai" if total >= 11 else "xiu"
             await asyncio.sleep(4)
-            if win:
-                win_amt = int(amt * 1.95)
-                add_money(uid, win_amt, f"Thắng Tài Xỉu {res_type.upper()}")
-                status = f"🎉 **THẮNG** | Nhận: `+{win_amt:,}đ`"
-            else:
-                status = f"❌ **THUA** | Chúc may mắn lần sau!"
-            res_str = "-".join(map(str, results))
-            await msg_status.edit_text(
-                f"📊 **KẾT QUẢ TÀI XỈU**\n━━━━━━━━━━━━━━━━━━━━━\n🎲 Xúc xắc: **{res_str}**\n🏆 Tổng điểm: **{total}** ({res_type.upper()})\n━━━━━━━━━━━━━━━━━━━━━\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`"
-            , parse_mode="Markdown")
+            if choice == res_type:
+                win = int(amt*1.95); add_money(uid, win, f"Thắng Tài Xỉu")
+                status = f"🎉 **THẮNG** | +`{win:,}đ`"
+            else: status = "❌ **THUA**"
+            await msg_status.edit_text(f"🎲 KQ: {total} ({res_type.upper()})\n{status}", parse_mode="Markdown")
 
     elif d == "menu_wooden":
-        if check_mt('mt_gomo') and uid not in ADMIN_IDS:
-            return await ctx.bot.send_message(uid, "⚙️ Game Gõ Mõ đang bảo trì!")
-        kb = []
-        row = []
-        for i, a in enumerate(amounts):
-            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"prep_wood_{a}"))
-            if (i + 1) % 4 == 0: kb.append(row); row = []
-        await q.edit_message_text("🪵 **GAME GÕ MÕ**\n\n- Mỗi lần gõ hệ số tăng **x0.3**.\n- Bạn phải rút trước khi mõ vỡ!\n\nChọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-
-    elif d.startswith("prep_wood_"):
-        amt = int(d.split("_")[2])
-        kb = [[InlineKeyboardButton("🪵 BẮT ĐẦU GÕ", callback_data=f"start_wood_{amt}")],
-              [InlineKeyboardButton("🔙 Quay lại", callback_data="menu_wooden")]]
-        await q.edit_message_text(f"🪵 **GÕ MÕ**\n💰 Cược: `{amt:,}đ`\n👇 Nhấn nút GÕ bên dưới để bắt đầu tăng hệ số!", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        kb = [([InlineKeyboardButton(f"{a//1000}k", callback_data=f"start_wood_{a}") for a in amounts[i:i+4]]) for i in range(0, len(amounts), 4)]
+        await q.edit_message_text("🪵 Chọn cược Gõ Mõ:", reply_markup=InlineKeyboardMarkup(kb))
 
     elif d.startswith("start_wood_"):
         amt = int(d.split("_")[2])
-        if not sub_money(uid, amt, "Cược Gõ Mõ"): 
-            return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
-        
-        is_win_wood = should_win()
-        if is_win_wood:
-            break_point = round(random.uniform(3.0, 10.0), 2)
-        else:
-            break_point = round(random.uniform(1.1, 1.8), 2)
-
+        if not sub_money(uid, amt, "Cược Gõ Mõ"): return
+        bp = round(random.uniform(3.0, 10.0), 2) if should_win() else round(random.uniform(1.1, 1.8), 2)
         game_id = f"wd_{uid}_{random.randint(100,999)}"
-        ctx.user_data[game_id] = {"status": "playing", "amt": amt, "mult": 1.0, "target": break_point}
-        kb = [[InlineKeyboardButton("🪵 GÕ (x1.00)", callback_data=f"hit_wood_{game_id}")],
-              [InlineKeyboardButton("💰 RÚT (x1.00)", callback_data=f"clm_wood_{game_id}")]]
-        await q.edit_message_text(f"🪵 **GÕ MÕ... CỘP CỘP!**\n📈 Hệ số hiện tại: **x1.00**\n💰 Tiền nếu rút: `{amt:,}đ`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        ctx.user_data[game_id] = {"amt": amt, "mult": 1.0, "target": bp}
+        kb = [[InlineKeyboardButton("🪵 GÕ", callback_data=f"hit_wood_{game_id}"), InlineKeyboardButton("💰 RÚT", callback_data=f"clm_wood_{game_id}")]]
+        await q.edit_message_text(f"🪵 Mõ: **x1.00**", reply_markup=InlineKeyboardMarkup(kb))
 
     elif d.startswith("hit_wood_"):
         parts = d.split("_")
-        game_id = f"{parts[2]}_{parts[3]}_{parts[4]}"
-        game = ctx.user_data.get(game_id)
-        if not game or game["status"] != "playing": return
+        gid = f"wd_{parts[2]}_{parts[3]}_{parts[4]}"
+        game = ctx.user_data.get(gid)
+        if not game: return
         game["mult"] = round(game["mult"] + 0.3, 2)
         if game["mult"] >= game["target"]:
-            game["status"] = "broken"
-            await q.edit_message_text(f"💥 **MÕ ĐÃ VỠ !!!**\n\nHệ số nhảy quá cao: **x{game['mult']}**\n💀 Mất: `{game['amt']:,}đ`", parse_mode="Markdown")
-            del ctx.user_data[game_id]
+            await q.edit_message_text("💥 **MÕ VỠ!**"); del ctx.user_data[gid]
         else:
-            win_now = int(game["amt"] * game["mult"])
-            kb = [[InlineKeyboardButton(f"🪵 GÕ TIẾP (x{game['mult']:.2f})", callback_data=f"hit_wood_{game_id}")],
-                  [InlineKeyboardButton(f"💰 RÚT TIỀN (x{game['mult']:.2f})", callback_data=f"clm_wood_{game_id}")]]
-            await q.edit_message_text(f"🪵 **GÕ MÕ... CỘP CỘP!**\n📈 Hệ số: **x{game['mult']:.2f}**\n💰 Tiền thắng: `{win_now:,}đ`", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+            kb = [[InlineKeyboardButton(f"🪵 GÕ (x{game['mult']:.2f})", callback_data=f"hit_wood_{parts[2]}_{parts[3]}_{parts[4]}"), InlineKeyboardButton("💰 RÚT", callback_data=f"clm_wood_{parts[2]}_{parts[3]}_{parts[4]}")]]
+            await q.edit_message_text(f"🪵 Mõ: **x{game['mult']:.2f}**", reply_markup=InlineKeyboardMarkup(kb))
 
     elif d.startswith("clm_wood_"):
         parts = d.split("_")
-        game_id = f"{parts[2]}_{parts[3]}_{parts[4]}"
-        game = ctx.user_data.get(game_id)
-        if game and game["status"] == "playing":
-            game["status"] = "claimed"
-            win_amt = int(game["amt"] * game["mult"])
-            add_money(uid, win_amt, f"Thắng Gõ Mõ x{game['mult']}")
-            await q.edit_message_text(f"🎉 **CHÚC MỪNG!**\n\nBạn đã dừng ở **x{game['mult']:.2f}**\n💰 Nhận được: `+{win_amt:,}đ`", parse_mode="Markdown")
-            del ctx.user_data[game_id]
+        gid = f"wd_{parts[2]}_{parts[3]}_{parts[4]}"
+        game = ctx.user_data.get(gid)
+        if game:
+            win = int(game["amt"] * game["mult"]); add_money(uid, win, "Thắng Gõ Mõ")
+            await q.edit_message_text(f"🎉 Nhận: `+{win:,}đ`")
+            del ctx.user_data[gid]
 
 # ===== KHỞI CHẠY BOT =====
 app = ApplicationBuilder().token(TOKEN).build()
@@ -952,6 +803,6 @@ app.add_handler(CommandHandler("nap", nap_tien_admin))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG - 2 ADMIN QUẢN LÝ - ĐÃ ĐỒNG BỘ KẾT QUẢ DICE!")
+print("BOT ĐÃ SẴN SÀNG - MENU NHẬN CODE ĐÃ ĐƯỢC CẬP NHẬT!")
 app.run_polling()
  
