@@ -15,7 +15,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 # Cập nhật danh sách Admin
 ADMIN_IDS = [7398112999, 8619503816]
 BOT_USERNAME = "zen88uytins1bot" 
-MIN_WITHDRAW = 100000
+MIN_WITHDRAW = 200000 # Đã sửa từ 100000 -> 200000
 WIN_RATE = 10 # Tỉ lệ thắng 10%
 
 # THÔNG TIN NẠP TIỀN
@@ -437,7 +437,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 row = query("SELECT refed FROM users WHERE user_id=?", (uid,)).fetchone()
                 if row and row[0] == 0:
                     if query("SELECT 1 FROM users WHERE user_id=?", (ref,)).fetchone():
-                        add_money(ref, 3000, "Ref bonus")
+                        add_money(ref, 500, "Ref bonus") # Đã sửa từ 2000 -> 500
                         query("UPDATE users SET refs=refs+1 WHERE user_id=?", (ref,))
                         query("UPDATE users SET refed=1 WHERE user_id=?", (uid,))
         except: pass
@@ -455,7 +455,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"👋 **CHÀO MỪNG {update.effective_user.first_name.upper()} ĐÃ THAM GIA!**\n\n"
         f"Hệ thống trò chơi minh bạch — uy tín hàng đầu.\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💰 **MIN RÚT TIỀN:** `100.000đ`\n"
+        f"💰 **MIN RÚT TIỀN:** `{MIN_WITHDRAW:,}đ`\n" # Sẽ hiển thị 200.000đ
         f"💳 **MIN NẠP TIỀN:** `20.000đ`\n"
         f"⚠️ *Lưu ý: Nạp dưới 20k sẽ không được tự động duyệt.*\n\n"
         f"⚖️ **CAM KẾT MINH BẠCH:**\n"
@@ -602,14 +602,14 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if res and res[0] == today:
             await user_reply.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
             return
-        add_money(uid,3000, "Daily Checkin")
+        add_money(uid, 300, "Daily Checkin") # Đã sửa từ 3000 -> 300
         query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
-        return await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+3000đ`", parse_mode="Markdown")
+        return await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+300đ`", parse_mode="Markdown")
 
     if txt == "📧 Mời bạn":
         msg = (
             "🚀 **KIẾM TIỀN TỪ LƯỢT MỜI**\n\n"
-            "💵 1F = `2,000đ`\n"
+            "💵 1F = `500đ`\n" # Đã hiển thị 500đ
             f"🔗 **Link của bạn:**\n`https://t.me/{BOT_USERNAME}?start={uid}`"
         )
         return await user_reply.reply_text(msg, parse_mode="Markdown")
@@ -695,7 +695,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         for i, a in enumerate(amounts):
             row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"prep_race_{a}"))
             if (i + 1) % 4 == 0: kb.append(row); row = []
-        await q.edit_message_text("🏎️ **ĐUA XE SIÊU CẤP**\Vui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        await q.edit_message_text("🏎️ **ĐUA XE SIÊU CẤP**\nVui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
     elif d.startswith("prep_race_"):
         amt = int(d.split("_")[2])
