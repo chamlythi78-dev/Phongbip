@@ -599,7 +599,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif txt == "📜 Lịch sử":
         await history_pro(update, ctx)
     elif txt == "📞 Hỗ trợ":
-        await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! Hoặc NT CHO @RoGarden")
+        await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! Hoặc NT CHO @winner12211")
     else:
         if uid != ADMIN_ID:
             await ctx.bot.send_message(chat_id=ADMIN_ID, text=f"📨 **TIN NHẮN HỖ TRỢ**\n👤 ID: `{uid}`\n📝 Nội dung: {txt}", parse_mode="Markdown")
