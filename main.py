@@ -14,9 +14,9 @@ def gen_code():
 TOKEN = os.getenv("BOT_TOKEN")
 # Cập nhật danh sách Admin
 ADMIN_IDS = [7398112999, 8619503816]
-BOT_USERNAME = "vuavipluxurybot" 
+BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 100000
-WIN_RATE = 30 # Tỉ lệ thắng 30%
+WIN_RATE = 10 # Tỉ lệ thắng 10%
 
 # THÔNG TIN NẠP TIỀN
 BANK_INFO = """
@@ -27,7 +27,7 @@ BANK_INFO = """
 💳 STK: `0343044321 `
 📝 NỘI DUNG CK: `{uid}`
 --------------------------
-⚠️ *Lưu ý: Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
+⚠️ *Lưu ý: Min nạp 20.000đ. Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
 """
 
 # ===== DATABASE SETUP =====
@@ -442,7 +442,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         query("UPDATE users SET refed=1 WHERE user_id=?", (uid,))
         except: pass
 
-    # THÊM NÚT "🎁 Nhận Code Free" VÀO MENU CHÍNH
+    # MENU CHÍNH
     menu = ReplyKeyboardMarkup([
         ["🎮 Danh sách game", "👤 Tài khoản"],
         ["💳 Nạp tiền", "🛒 Rút tiền"],
@@ -456,8 +456,8 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"Hệ thống trò chơi minh bạch — uy tín hàng đầu.\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 **MIN RÚT TIỀN:** `100.000đ`\n"
-        f"💳 **MIN NẠP TIỀN:** `10.000đ`\n"
-        f"⚠️ *Lưu ý: Nạp dưới 10k sẽ không được tự động duyệt.*\n\n"
+        f"💳 **MIN NẠP TIỀN:** `20.000đ`\n"
+        f"⚠️ *Lưu ý: Nạp dưới 20k sẽ không được tự động duyệt.*\n\n"
         f"⚖️ **CAM KẾT MINH BẠCH:**\n"
         f"• **100%** Kết quả hoàn toàn ngẫu nhiên.\n"
         f"• 🔄 **KHÔNG** can thiệp kết quả dưới mọi hình thức.\n"
@@ -695,7 +695,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         for i, a in enumerate(amounts):
             row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"prep_race_{a}"))
             if (i + 1) % 4 == 0: kb.append(row); row = []
-        await q.edit_message_text("🏎️ **ĐUA XE SIÊU CẤP**\nVui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        await q.edit_message_text("🏎️ **ĐUA XE SIÊU CẤP**\Vui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
     elif d.startswith("prep_race_"):
         amt = int(d.split("_")[2])
