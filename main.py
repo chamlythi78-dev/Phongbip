@@ -51,9 +51,17 @@ CREATE TABLE IF NOT EXISTS users (
     stk TEXT DEFAULT NULL,
     name TEXT DEFAULT NULL,
     last_checkin TEXT,
-    last_withdraw TEXT
+    last_withdraw TEXT,
+    total_bet INTEGER DEFAULT 0
 )
 """)
+
+# Fix cho database cũ nếu đã tồn tại nhưng chưa có cột total_bet
+try:
+    query("ALTER TABLE users ADD COLUMN total_bet INTEGER DEFAULT 0")
+except:
+    pass
+
 query("CREATE TABLE IF NOT EXISTS history (user_id INTEGER, amount INTEGER, note TEXT, time TEXT)")
 query("CREATE TABLE IF NOT EXISTS banned (user_id INTEGER PRIMARY KEY)")
 
@@ -117,6 +125,11 @@ def sub_money(uid, amt, note="withdraw"):
     now_str = datetime.now().strftime("%H:%M - %d/%m/%Y")
     query("UPDATE users SET balance=balance-? WHERE user_id=?", (amt, uid))
     query("INSERT INTO history VALUES(?,?,?,?)", (uid, -amt, note, now_str))
+    
+    # TÍNH TỔNG CƯỢC: Nếu không phải rút tiền hoặc Admin trừ tiền thủ công thì cộng vào tổng cược
+    if note != "Rút tiền" and note != "withdraw" and "Admin" not in note:
+        query("UPDATE users SET total_bet=total_bet+? WHERE user_id=?", (amt, uid))
+        
     return True
 
 # ===== LOGIC GAMES ANIMATION =====
@@ -311,13 +324,14 @@ async def admin_info(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     try:
         target_id = int(ctx.args[0])
-        u = query("SELECT balance, refs, bank, stk, name, last_checkin FROM users WHERE user_id=?", (target_id,)).fetchone()
+        u = query("SELECT balance, refs, bank, stk, name, last_checkin, total_bet FROM users WHERE user_id=?", (target_id,)).fetchone()
         if not u:
             return await update.message.reply_text("❌ Không tìm thấy người dùng này.")
         msg = (
             f"📂 **THÔNG TIN CHI TIẾT USER `{target_id}`**\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"💰 Số dư: `{u[0]:,}đ`\n"
+            f"📊 Tổng cược: `{u[6]:,}đ`\n" # Đã thêm tổng cược cho Admin xem
             f"👥 Số người mời: `{u[1]}`\n"
             f"🏛 Ngân hàng: `{u[2] or 'Chưa cập nhật'}`\n"
             f"💳 Số tài khoản: `{u[3] or 'Chưa cập nhật'}`\n"
@@ -430,7 +444,7 @@ async def check_user_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             msg = f"📜 **LỊCH SỬ USER `{uid}`:**\n\n"
             for d in data:
-                msg += f"💰 `{d[0]:,}` | {d[1]} | _{d[2]}_\n" # Giữ nguyên format thời gian mới
+                msg += f"💰 `{d[0]:,}` | {d[1]} | _{d[2]}_\n" 
             if len(msg) > 4000:
                 for x in range(0, len(msg), 4000):
                     await update.message.reply_text(msg[x:x+4000], parse_mode="Markdown")
@@ -550,15 +564,16 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     parts = txt.split()
 
     if txt == "👤 Tài khoản":
-        u = query("SELECT balance, bank, stk, name, refs FROM users WHERE user_id=?", (uid,)).fetchone()
+        u = query("SELECT balance, bank, stk, name, refs, total_bet FROM users WHERE user_id=?", (uid,)).fetchone()
         if not u: 
             get_user(uid)
-            u = (0, None, None, None, 0)
+            u = (0, None, None, None, 0, 0)
         msg = (
             f"👤 **THÔNG TIN TÀI KHOẢN**\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 ID: `{uid}`\n"
             f"💰 Số dư: `{u[0]:,}đ`\n"
+            f"📊 **Tổng cược:** `{u[5]:,}đ`\n" # ĐÃ CẬP NHẬT TỔNG CƯỢC
             f"👥 Đã mời: `{u[4]}` người\n"
             f"🏛 Ngân hàng: `{u[1] or 'Chưa liên kết'}`\n"
             f"💳 STK: `{u[2] or 'Chưa liên kết'}`\n"
@@ -842,7 +857,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             msg_status = await ctx.bot.send_message(uid, frames[0], parse_mode="Markdown")
             for f in frames[1:]:
                 await asyncio.sleep(0.4)
-                # TÁCH DÒNG TRY-EXCEPT ĐỂ TRÁNH LỖI SYNTAX
                 try: 
                     await msg_status.edit_text(f + "\n⚡️ ĐANG LẮC...")
                 except: 
@@ -1033,6 +1047,6 @@ app.add_handler(CommandHandler("nap", nap_tien_admin))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG - GIỮ NGUYÊN LOGIC GỐC - CẬP NHẬT ĐỊNH DẠNG THỜI GIAN!")
+print("BOT ĐÃ SẴN SÀNG - ĐÃ TÍCH HỢP TỔNG CƯỢC - GIỮ NGUYÊN LOGIC GỐC!")
 app.run_polling()
  
