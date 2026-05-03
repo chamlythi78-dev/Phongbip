@@ -842,7 +842,11 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             msg_status = await ctx.bot.send_message(uid, frames[0], parse_mode="Markdown")
             for f in frames[1:]:
                 await asyncio.sleep(0.4)
-                try: await msg_status.edit_text(f + "\n⚡️ ĐANG LẮC..."); except: pass
+                # TÁCH DÒNG TRY-EXCEPT ĐỂ TRÁNH LỖI SYNTAX
+                try: 
+                    await msg_status.edit_text(f + "\n⚡️ ĐANG LẮC...")
+                except: 
+                    pass
 
             is_win_game = should_win()
             if is_win_game:
@@ -1031,3 +1035,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG - GIỮ NGUYÊN LOGIC GỐC - CẬP NHẬT ĐỊNH DẠNG THỜI GIAN!")
 app.run_polling()
+ 
