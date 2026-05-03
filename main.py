@@ -390,11 +390,45 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     total = query("SELECT COUNT(*) FROM users").fetchone()[0]
     await update.message.reply_text(f"📊 **THỐNG KÊ:**\n\n👥 Tổng số người dùng: `{total}`", parse_mode="Markdown")
 
-async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
     if update.effective_user.id not in ADMIN_IDS: return
-    users = query("SELECT user_id FROM users ORDER BY rowid DESC LIMIT 50").fetchall()
-    msg = "👥 **DANH SÁCH USER (50 gần nhất):**\n\n" + "\n".join([f"`{u[0]}`" for u in users])
-    await update.message.reply_text(msg or "Chưa có user nào.", parse_mode="Markdown")
+    
+    limit = 20  # Mỗi trang hiện 20 user
+    offset = page * limit
+    
+    # Lấy danh sách user theo trang
+    users = query("SELECT user_id, balance FROM users ORDER BY rowid DESC LIMIT ? OFFSET ?", (limit, offset)).fetchall()
+    total_users = query("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_pages = (total_users + limit - 1) // limit
+
+    if not users:
+        return await update.message.reply_text("Chưa có người dùng nào.")
+
+    kb = []
+    for u in users:
+        u_id, bal = u[0], u[1]
+        status = "🚫" if is_banned(u_id) else "🟢"
+        kb.append([InlineKeyboardButton(f"{status} ID: {u_id} | {bal:,}đ", callback_data=f"adm_manage_{u_id}_{page}")])
+
+    # Nút điều hướng phân trang
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton("⬅️ Trước", callback_data=f"adm_page_{page-1}"))
+    
+    nav_buttons.append(InlineKeyboardButton(f"Trang {page+1}/{total_pages}", callback_data="none"))
+    
+    if (page + 1) < total_pages:
+        nav_buttons.append(InlineKeyboardButton("Sau ➡️", callback_data=f"adm_page_{page+1}"))
+    
+    kb.append(nav_buttons)
+    kb.append([InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")])
+
+    text = f"👥 **DANH SÁCH NGƯỜI DÙNG** (Tổng: {total_users})\nBấm vào User để xem chi tiết:"
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def history_all_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
@@ -674,6 +708,63 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     d = q.data
     uid = q.from_user.id
     
+    # XỬ LÝ PHÂN TRANG CHO ADMIN
+    if d.startswith("adm_page_"):
+        if uid not in ADMIN_IDS: return
+        new_page = int(d.split("_")[2])
+        await all_user(update, ctx, page=new_page)
+        return
+
+    # XỬ LÝ QUAY LẠI MENU CHI TIẾT USER
+    if d.startswith("adm_manage_"):
+        if uid not in ADMIN_IDS: return
+        parts = d.split("_")
+        target_id = int(parts[2])
+        current_page = int(parts[3]) if len(parts) > 3 else 0
+        
+        u = query("SELECT balance, refs, bank, stk, name, last_checkin, total_bet FROM users WHERE user_id=?", (target_id,)).fetchone()
+        if not u: return await q.answer("Không tìm thấy user!")
+        
+        status_text = "🚫 ĐANG CHẶN" if is_banned(target_id) else "🟢 HOẠT ĐỘNG"
+        msg = (
+            f"👤 **QUẢN LÝ USER:** `{target_id}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 Số dư: `{u[0]:,}đ`\n"
+            f"📊 Tổng cược: `{u[6]:,}đ`\n"
+            f"🏛 Bank: `{u[2] or 'Chưa'}` | `{u[3] or ''}`\n"
+            f"🚦 Trạng thái: **{status_text}**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━"
+        )
+        
+        kb = [
+            [InlineKeyboardButton("🚫 BAN", callback_data=f"adm_act_ban_{target_id}_{current_page}"), 
+             InlineKeyboardButton("✅ UNBAN", callback_data=f"adm_act_unban_{target_id}_{current_page}")],
+            [InlineKeyboardButton("➕ 100k", callback_data=f"adm_act_add_{target_id}_100000_{current_page}"), 
+             InlineKeyboardButton("➖ 100k", callback_data=f"adm_act_sub_{target_id}_100000_{current_page}")],
+            [InlineKeyboardButton("🔙 QUAY LẠI TRANG {0}".format(current_page+1), callback_data=f"adm_page_{current_page}")]
+        ]
+        await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        return
+
+    # XỬ LÝ CÁC HÀNH ĐỘNG NHANH TRONG MENU USER
+    if d.startswith("adm_act_"):
+        if uid not in ADMIN_IDS: return
+        parts = d.split("_")
+        act = parts[2]
+        tid = int(parts[3])
+        page_to_return = int(parts[-1])
+        
+        if act == "ban": query("INSERT OR IGNORE INTO banned VALUES(?)", (tid,))
+        elif act == "unban": query("DELETE FROM banned WHERE user_id=?", (tid,))
+        elif act == "add": add_money(tid, int(parts[4]), "Admin cộng tiền")
+        elif act == "sub": sub_money(tid, int(parts[4]), "Admin trừ tiền")
+        
+        await q.answer("Thành công!")
+        # Load lại trang chi tiết user đó
+        await handle_callback(update, ctx) # Tái sử dụng logic manage
+        q.data = f"adm_manage_{tid}_{page_to_return}"
+        return await handle_callback(update, ctx)
+
     if d.startswith("tg_mt_"):
         if uid not in ADMIN_IDS: return
         key = d.replace("tg_", "")
@@ -1047,6 +1138,5 @@ app.add_handler(CommandHandler("nap", nap_tien_admin))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG - ĐÃ TÍCH HỢP TỔNG CƯỢC - GIỮ NGUYÊN LOGIC GỐC!")
+print("BOT ĐÃ SẴN SÀNG - ĐÃ TÍCH HỢP TỔNG CƯỢC & PHÂN TRANG USER!")
 app.run_polling()
- 
