@@ -103,16 +103,20 @@ def is_banned(uid):
 
 def add_money(uid, amt, note):
     get_user(uid)
+    # Cập nhật thời gian: Giờ:Phút - Ngày/Tháng/Năm
+    now_str = datetime.now().strftime("%H:%M - %d/%m/%Y")
     query("UPDATE users SET balance=balance+? WHERE user_id=?", (amt, uid))
-    query("INSERT INTO history VALUES(?,?,?,?)", (uid, amt, note, str(datetime.now())))
+    query("INSERT INTO history VALUES(?,?,?,?)", (uid, amt, note, now_str))
 
 def sub_money(uid, amt, note="withdraw"):
     get_user(uid)
     bal = get_balance(uid)
     if bal < amt:
         return False
+    # Cập nhật thời gian: Giờ:Phút - Ngày/Tháng/Năm
+    now_str = datetime.now().strftime("%H:%M - %d/%m/%Y")
     query("UPDATE users SET balance=balance-? WHERE user_id=?", (amt, uid))
-    query("INSERT INTO history VALUES(?,?,?,?)", (uid, -amt, note, str(datetime.now())))
+    query("INSERT INTO history VALUES(?,?,?,?)", (uid, -amt, note, now_str))
     return True
 
 # ===== LOGIC GAMES ANIMATION =====
@@ -426,7 +430,7 @@ async def check_user_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             msg = f"📜 **LỊCH SỬ USER `{uid}`:**\n\n"
             for d in data:
-                msg += f"💰 `{d[0]:,}` | {d[1]} | _{d[2][:16]}_\n"
+                msg += f"💰 `{d[0]:,}` | {d[1]} | _{d[2]}_\n" # Giữ nguyên format thời gian mới
             if len(msg) > 4000:
                 for x in range(0, len(msg), 4000):
                     await update.message.reply_text(msg[x:x+4000], parse_mode="Markdown")
@@ -531,7 +535,7 @@ async def history_pro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         msg = "📜 **LỊCH SỬ CHI TIẾT:**\n\n"
         for d in data:
             icon = "➕" if d[0] > 0 else "➖"
-            msg += f"{icon} `{d[0]:,}đ` | {d[1]}\n"
+            msg += f"{icon} `{d[0]:,}đ` | {d[1]} | _{d[2]}_\n"
         if len(msg) > 4000:
             for x in range(0, len(msg), 4000):
                 await update.message.reply_text(msg[x:x+4000], parse_mode="Markdown")
@@ -606,7 +610,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     if txt == "🎁 Checkin":
-        today = str(datetime.now().date())
+        today = datetime.now().strftime("%d/%m/%Y")
         res = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()
         if res and res[0] == today:
             await user_reply.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
@@ -1025,6 +1029,5 @@ app.add_handler(CommandHandler("nap", nap_tien_admin))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG - ĐÃ CẬP NHẬT XÓC ĐĨA VIP & HỆ SỐ NHÂN!")
+print("BOT ĐÃ SẴN SÀNG - GIỮ NGUYÊN LOGIC GỐC - CẬP NHẬT ĐỊNH DẠNG THỜI GIAN!")
 app.run_polling()
- 
