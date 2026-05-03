@@ -571,7 +571,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if txt == "🎁 Nhận Code Free":
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("📺 THAM GIA NHÓM NHẬN CODE", url="https://t.me/vuatelevision")],
-            [InlineKeyboardButton("📢 KÊNH THÔNG BÁO", url="https://t.me/thanhall")]
+            [InlineKeyboardButton("📢 KÊNH THÔNG BÁO", url="https://t.me/hocvienthanbai5")]
         ])
         msg = (
             "🎁 **NHẬN GIFTCODE MIỄN PHÍ**\n\n"
