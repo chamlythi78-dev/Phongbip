@@ -16,7 +16,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [7398112999, 8619503816]
 BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 200000 
-WIN_RATE = 40 # Tỉ lệ thắng 40%
+WIN_RATE = 20 # Tỉ lệ thắng 20%
 
 # THÔNG TIN NẠP TIỀN
 BANK_INFO = """
@@ -739,8 +739,8 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         kb = [
             [InlineKeyboardButton("🚫 BAN", callback_data=f"adm_act_ban_{target_id}_{current_page}"), 
              InlineKeyboardButton("✅ UNBAN", callback_data=f"adm_act_unban_{target_id}_{current_page}")],
-            [InlineKeyboardButton("➕ 100k", callback_data=f"adm_act_add_{target_id}_100000_{current_page}"), 
-             InlineKeyboardButton("➖ 100k", callback_data=f"adm_act_sub_{target_id}_100000_{current_page}")],
+            [InlineKeyboardButton("➕ BẢO TRÌ", callback_data=f"adm_act_add_{target_id}_0_{current_page}"), 
+             InlineKeyboardButton("➖ BẢO TRÌ", callback_data=f"adm_act_sub_{target_id}_0_{current_page}")],
             [InlineKeyboardButton("🔙 QUAY LẠI TRANG {0}".format(current_page+1), callback_data=f"adm_page_{current_page}")]
         ]
         await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
