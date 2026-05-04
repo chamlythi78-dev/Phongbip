@@ -16,15 +16,15 @@ TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [7398112999, 8619503816]
 BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 200000 
-WIN_RATE = 10 # Tỉ lệ thắng 10%
+WIN_RATE = 40 # Tỉ lệ thắng 40%
 
 # THÔNG TIN NẠP TIỀN
 BANK_INFO = """
 🏦 **THÔNG TIN NẠP TIỀN**
 --------------------------
 🏛 Ngân hàng: **VPBANK**
-👤 CTK: **TRAN DAI THANG **
-💳 STK: `0343044321 `
+👤 CTK: **LUU TON DUONG**
+💳 STK: `2709220899`
 📝 NỘI DUNG CK: `{uid}`
 --------------------------
 ⚠️ *Lưu ý: Min nạp 20.000đ. Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
