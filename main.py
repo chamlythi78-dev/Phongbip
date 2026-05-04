@@ -511,7 +511,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     menu = ReplyKeyboardMarkup([
         ["🎮 Danh sách game", "👤 Tài khoản"],
         ["💳 Nạp tiền", "🛒 Rút tiền"],
-        ["🎁 Checkin", "🎁NHẬP CODE VÀ Nhận Code Free"],
+        ["🎁 Checkin", "🎁 Nhận Code Free"],
         ["📜 Lịch sử", "📞 Hỗ trợ"]
     ], resize_keyboard=True)
 
