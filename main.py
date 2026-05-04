@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
-import sqlite3
+import psycopg2  # Đã đổi từ sqlite3
+from psycopg2 import extras
 from datetime import datetime, timedelta
 import os
 import asyncio
@@ -12,7 +13,9 @@ def gen_code():
 
 # ===== CONFIG =====
 TOKEN = os.getenv("BOT_TOKEN")
-# Cập nhật danh sách Admin
+# Lấy URL DATABASE từ Railway
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 ADMIN_IDS = [7398112999, 8619503816]
 BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 200000 
@@ -30,21 +33,30 @@ BANK_INFO = """
 ⚠️ *Lưu ý: Min nạp 20.000đ. Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
 """
 
-# ===== DATABASE SETUP =====
-conn = sqlite3.connect("bot.db", check_same_thread=False)
+# ===== DATABASE SETUP (POSTGRESQL) =====
+def get_db_connection():
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    return conn
 
+# Hàm thực thi truy vấn (Đổi ? thành %s)
 def query(q, args=()):
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(q, args)
+    res = None
+    if cur.description:
+        res = cur.fetchall()
     conn.commit()
-    return cur
+    cur.close()
+    conn.close()
+    return res
 
-# Khởi tạo toàn bộ các bảng
+# Khởi tạo toàn bộ các bảng (Postgres dùng BIGINT cho ID Telegram)
 query("CREATE TABLE IF NOT EXISTS codes (code TEXT PRIMARY KEY, reward INTEGER, uses INTEGER)")
 query("""
 CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
-    balance INTEGER DEFAULT 0,
+    user_id BIGINT PRIMARY KEY,
+    balance BIGINT DEFAULT 0,
     refs INTEGER DEFAULT 0,
     refed INTEGER DEFAULT 0,
     bank TEXT DEFAULT NULL,
@@ -52,18 +64,18 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT DEFAULT NULL,
     last_checkin TEXT,
     last_withdraw TEXT,
-    total_bet INTEGER DEFAULT 0
+    total_bet BIGINT DEFAULT 0
 )
 """)
 
 # Fix cho database cũ nếu đã tồn tại nhưng chưa có cột total_bet
 try:
-    query("ALTER TABLE users ADD COLUMN total_bet INTEGER DEFAULT 0")
+    query("ALTER TABLE users ADD COLUMN total_bet BIGINT DEFAULT 0")
 except:
     pass
 
-query("CREATE TABLE IF NOT EXISTS history (user_id INTEGER, amount INTEGER, note TEXT, time TEXT)")
-query("CREATE TABLE IF NOT EXISTS banned (user_id INTEGER PRIMARY KEY)")
+query("CREATE TABLE IF NOT EXISTS history (user_id BIGINT, amount BIGINT, note TEXT, time TEXT)")
+query("CREATE TABLE IF NOT EXISTS banned (user_id BIGINT PRIMARY KEY)")
 
 # BẢNG CÀI ĐẶT BẢO TRÌ
 query("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value INTEGER)")
@@ -73,13 +85,14 @@ maintenance_keys = [
     'mt_nap', 'mt_rut', 'mt_xocdia'
 ]
 for k in maintenance_keys:
-    if not query("SELECT 1 FROM settings WHERE key=?", (k,)).fetchone():
-        query("INSERT INTO settings VALUES(?, 0)", (k,))
+    res = query("SELECT 1 FROM settings WHERE key=%s", (k,))
+    if not res:
+        query("INSERT INTO settings VALUES(%s, 0)", (k,))
 
 # Hàm kiểm tra trạng thái bảo trì
 def check_mt(key):
-    res = query("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
-    return res[0] == 1 if res else False
+    res = query("SELECT value FROM settings WHERE key=%s", (key,))
+    return res[0][0] == 1 if res else False
 
 # ===== LOGIC KIỂM SOÁT TỈ LỆ =====
 def should_win():
@@ -98,22 +111,24 @@ def get_next_multiplier(current_mult):
 
 # ===== USER UTILS =====
 def get_user(uid):
-    if not query("SELECT 1 FROM users WHERE user_id=?", (uid,)).fetchone():
-        query("INSERT INTO users(user_id) VALUES(?)", (uid,))
+    res = query("SELECT 1 FROM users WHERE user_id=%s", (uid,))
+    if not res:
+        query("INSERT INTO users(user_id) VALUES(%s)", (uid,))
 
 def get_balance(uid):
     get_user(uid)
-    res = query("SELECT balance FROM users WHERE user_id=?", (uid,)).fetchone()
-    return res[0] if res else 0
+    res = query("SELECT balance FROM users WHERE user_id=%s", (uid,))
+    return res[0][0] if res else 0
 
 def is_banned(uid):
-    return query("SELECT 1 FROM banned WHERE user_id=?", (uid,)).fetchone() is not None
+    res = query("SELECT 1 FROM banned WHERE user_id=%s", (uid,))
+    return len(res) > 0 if res else False
 
 def add_money(uid, amt, note):
     get_user(uid)
     now_str = datetime.now().strftime("%H:%M - %d/%m/%Y")
-    query("UPDATE users SET balance=balance+? WHERE user_id=?", (amt, uid))
-    query("INSERT INTO history VALUES(?,?,?,?)", (uid, amt, note, now_str))
+    query("UPDATE users SET balance=balance+%s WHERE user_id=%s", (amt, uid))
+    query("INSERT INTO history VALUES(%s,%s,%s,%s)", (uid, amt, note, now_str))
 
 def sub_money(uid, amt, note="withdraw"):
     get_user(uid)
@@ -121,11 +136,11 @@ def sub_money(uid, amt, note="withdraw"):
     if bal < amt:
         return False
     now_str = datetime.now().strftime("%H:%M - %d/%m/%Y")
-    query("UPDATE users SET balance=balance-? WHERE user_id=?", (amt, uid))
-    query("INSERT INTO history VALUES(?,?,?,?)", (uid, -amt, note, now_str))
+    query("UPDATE users SET balance=balance-%s WHERE user_id=%s", (amt, uid))
+    query("INSERT INTO history VALUES(%s,%s,%s,%s)", (uid, -amt, note, now_str))
     
     if note != "Rút tiền" and note != "withdraw" and "Admin" not in note:
-        query("UPDATE users SET total_bet=total_bet+? WHERE user_id=?", (amt, uid))
+        query("UPDATE users SET total_bet=total_bet+%s WHERE user_id=%s", (amt, uid))
         
     return True
 
@@ -252,16 +267,17 @@ async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Vui lòng nhập kèm mã. VD: `/code ABC123`")
         return
     code_str = ctx.args[0].strip().upper()
-    data = query("SELECT * FROM codes WHERE code=?", (code_str,)).fetchone()
+    data = query("SELECT * FROM codes WHERE code=%s", (code_str,))
     if not data:
         await update.message.reply_text("❌ Mã quà tặng không tồn tại.")
         return
-    reward, uses = data[1], data[2]
+    # Postgres trả về list tuple: data[0] là hàng đầu tiên
+    reward, uses = data[0][1], data[0][2]
     if uses <= 0:
         await update.message.reply_text("❌ Mã quà tặng này đã hết lượt sử dụng.")
         return
     add_money(uid, reward, f"Code: {code_str}")
-    query("UPDATE codes SET uses=uses-1 WHERE code=?", (code_str,))
+    query("UPDATE codes SET uses=uses-1 WHERE code=%s", (code_str,))
     await update.message.reply_text(f"🎉 **NHẬN QUÀ THÀNH CÔNG!**\n\n💰 Bạn nhận được: `+{reward:,}đ`", parse_mode="Markdown")
 
 # ===== ADMIN COMMANDS =====
@@ -311,7 +327,7 @@ async def reset_bank(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     try:
         target_id = int(ctx.args[0])
-        query("UPDATE users SET bank=NULL, stk=NULL, name=NULL WHERE user_id=?", (target_id,))
+        query("UPDATE users SET bank=NULL, stk=NULL, name=NULL WHERE user_id=%s", (target_id,))
         await update.message.reply_text(f"✅ Đã reset bank cho ID `{target_id}`. User có thể dùng /lienket lại.")
         await ctx.bot.send_message(chat_id=target_id, text="🔔 Admin đã reset thông tin ngân hàng của bạn. Bạn có thể liên kết lại ngay bây giờ.")
     except:
@@ -321,9 +337,10 @@ async def admin_info(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     try:
         target_id = int(ctx.args[0])
-        u = query("SELECT balance, refs, bank, stk, name, last_checkin, total_bet FROM users WHERE user_id=?", (target_id,)).fetchone()
-        if not u:
+        res = query("SELECT balance, refs, bank, stk, name, last_checkin, total_bet FROM users WHERE user_id=%s", (target_id,))
+        if not res:
             return await update.message.reply_text("❌ Không tìm thấy người dùng này.")
+        u = res[0]
         msg = (
             f"📂 **THÔNG TIN CHI TIẾT USER `{target_id}`**\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -345,7 +362,7 @@ async def tao_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     try:
         reward, uses = int(ctx.args[0]), int(ctx.args[1])
         code = gen_code()
-        query("INSERT INTO codes (code, reward, uses) VALUES(?,?,?)", (code, reward, uses))
+        query("INSERT INTO codes (code, reward, uses) VALUES(%s,%s,%s)", (code, reward, uses))
         await update.message.reply_text(f"✅ **TẠO CODE THÀNH CÔNG**\n\n🎁 Code: `{code}`\n💰 Thưởng: `{reward:,}đ`\n🔄 Lượt: `{uses}`", parse_mode="Markdown")
     except:
         await update.message.reply_text("❌ Cú pháp: `/taocode [số tiền] [lượt dùng]`")
@@ -370,7 +387,7 @@ async def ban(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     try:
         uid = int(ctx.args[0])
-        query("INSERT OR IGNORE INTO banned(user_id) VALUES(?)", (uid,))
+        query("INSERT INTO banned(user_id) VALUES(%s) ON CONFLICT (user_id) DO NOTHING", (uid,))
         await update.message.reply_text(f"🚫 Đã chặn người dùng `{uid}`")
     except: pass
 
@@ -378,13 +395,14 @@ async def unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     try:
         uid = int(ctx.args[0])
-        query("DELETE FROM banned WHERE user_id=?", (uid,))
+        query("DELETE FROM banned WHERE user_id=%s", (uid,))
         await update.message.reply_text(f"✅ Đã bỏ chặn người dùng `{uid}`")
     except: pass
 
 async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
-    total = query("SELECT COUNT(*) FROM users").fetchone()[0]
+    res = query("SELECT COUNT(*) FROM users")
+    total = res[0][0] if res else 0
     await update.message.reply_text(f"📊 **THỐNG KÊ:**\n\n👥 Tổng số người dùng: `{total}`", parse_mode="Markdown")
 
 async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
@@ -393,8 +411,10 @@ async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
     limit = 20
     offset = page * limit
     
-    users = query("SELECT user_id, balance FROM users ORDER BY rowid DESC LIMIT ? OFFSET ?", (limit, offset)).fetchall()
-    total_users = query("SELECT COUNT(*) FROM users").fetchone()[0]
+    # Postgres dùng ctid để thay rowid hoặc order by user_id
+    users = query("SELECT user_id, balance FROM users ORDER BY user_id DESC LIMIT %s OFFSET %s", (limit, offset))
+    res_total = query("SELECT COUNT(*) FROM users")
+    total_users = res_total[0][0] if res_total else 0
     total_pages = (total_users + limit - 1) // limit
 
     if not users:
@@ -427,10 +447,11 @@ async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
 
 async def history_all_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
-    data = query("SELECT * FROM history ORDER BY rowid DESC").fetchall()
+    data = query("SELECT * FROM history ORDER BY time DESC LIMIT 50") # Giới hạn 50 bản ghi mới nhất để tránh lag
     msg = "🌐 **LỊCH SỬ TOÀN HỆ THỐNG:**\n\n"
-    for d in data:
-        msg += f"👤 `{d[0]}` | `{d[1]:,}đ` | {d[2]}\n"
+    if data:
+        for d in data:
+            msg += f"👤 `{d[0]}` | `{d[1]:,}đ` | {d[2]}\n"
     if len(msg) > 4000:
         for x in range(0, len(msg), 4000):
             await update.message.reply_text(msg[x:x+4000], parse_mode="Markdown")
@@ -442,7 +463,7 @@ async def broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
         return await update.message.reply_text("❌ Cú pháp: `/send [nội dung]`")
     msg_to_send = " ".join(ctx.args)
-    users = query("SELECT user_id FROM users").fetchall()
+    users = query("SELECT user_id FROM users")
     sent, failed = 0, 0
     status_msg = await update.message.reply_text(f"🚀 Đang gửi tới {len(users)} người...")
     for user in users:
@@ -467,7 +488,7 @@ async def check_user_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     try:
         uid = int(ctx.args[0])
-        data = query("SELECT amount, note, time FROM history WHERE user_id=? ORDER BY rowid DESC", (uid,)).fetchall()
+        data = query("SELECT amount, note, time FROM history WHERE user_id=%s ORDER BY time DESC", (uid,))
         if not data:
             await update.message.reply_text(f"📥 User `{uid}` chưa có giao dịch.")
         else:
@@ -492,15 +513,15 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         try:
             ref = int(ctx.args[0])
             if ref != uid:
-                row = query("SELECT refed FROM users WHERE user_id=?", (uid,)).fetchone()
-                if row and row[0] == 0:
-                    if query("SELECT 1 FROM users WHERE user_id=?", (ref,)).fetchone():
+                row = query("SELECT refed FROM users WHERE user_id=%s", (uid,))
+                if row and row[0][0] == 0:
+                    if query("SELECT 1 FROM users WHERE user_id=%s", (ref,)):
                         add_money(ref, 500, "Ref bonus") 
-                        query("UPDATE users SET refs=refs+1 WHERE user_id=?", (ref,))
-                        query("UPDATE users SET refed=1 WHERE user_id=?", (uid,))
+                        query("UPDATE users SET refs=refs+1 WHERE user_id=%s", (ref,))
+                        query("UPDATE users SET refed=1 WHERE user_id=%s", (uid,))
         except: pass
 
-    # MENU CHÍNH (Đã xóa "Mời bạn")
+    # MENU CHÍNH
     menu = ReplyKeyboardMarkup([
         ["🎮 Danh sách game", "👤 Tài khoản"],
         ["💳 Nạp tiền", "🛒 Rút tiền"],
@@ -527,15 +548,15 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
-    u_bank = query("SELECT bank FROM users WHERE user_id=?", (uid,)).fetchone()
-    if u_bank and u_bank[0] is not None:
+    res = query("SELECT bank FROM users WHERE user_id=%s", (uid,))
+    if res and res[0][0] is not None:
         return await update.message.reply_text("❌ Bạn đã liên kết ngân hàng rồi. Để thay đổi, vui lòng liên hệ Admin!", parse_mode="Markdown")
     if not ctx.args or len(ctx.args) < 3:
         return await update.message.reply_text("⚠️ **Cú pháp liên kết:**\n`/lienket [Ngân_hàng] [STK] [Chủ_TK]`\n\nVD: `/lienket MBBANK 0123456 NGUYEN VAN A`", parse_mode="Markdown")
     bank = ctx.args[0].upper()
     stk = ctx.args[1]
     name = " ".join(ctx.args[2:]).upper()
-    query("UPDATE users SET bank=?, stk=?, name=? WHERE user_id=?", (bank, stk, name, uid))
+    query("UPDATE users SET bank=%s, stk=%s, name=%s WHERE user_id=%s", (bank, stk, name, uid))
     await update.message.reply_text(f"✅ **LIÊN KẾT THÀNH CÔNG**\n\n🏛 Ngân hàng: {bank}\n💳 STK: `{stk}`\n👤 Chủ TK: {name}\n\n⚠️ *Thông tin này đã được khóa để bảo mật.*", parse_mode="Markdown")
 
 # ===== RÚT TIỀN =====
@@ -545,9 +566,10 @@ async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if check_mt('mt_rut') and uid not in ADMIN_IDS:
         return await update.message.reply_text("⚙️ Hệ thống Rút Tiền đang bảo trì, vui lòng quay lại sau!")
         
-    u = query("SELECT bank, stk, name, balance FROM users WHERE user_id=?", (uid,)).fetchone()
-    if not u or not u[0] or not u[1]:
+    res = query("SELECT bank, stk, name, balance FROM users WHERE user_id=%s", (uid,))
+    if not res or not res[0][0] or not res[0][1]:
         return await update.message.reply_text("❌ Bạn chưa liên kết tài khoản ngân hàng.\n👉 Hãy dùng lệnh: `/lienket [Ngân_hàng] [STK] [Tên]`", parse_mode="Markdown")
+    u = res[0]
     if not ctx.args:
         return await update.message.reply_text(f"💰 Số dư: `{u[3]:,}`đ\n⚠️ Nhập số tiền muốn rút: `/rut [số tiền]`", parse_mode="Markdown")
     try:
@@ -570,7 +592,7 @@ async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ===== LỊCH SỬ CHO NGƯỜI DÙNG =====
 async def history_pro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    data = query("SELECT amount, note, time FROM history WHERE user_id=? ORDER BY rowid DESC", (uid,)).fetchall()
+    data = query("SELECT amount, note, time FROM history WHERE user_id=%s ORDER BY time DESC LIMIT 20", (uid,))
     if not data:
         await update.message.reply_text("📥 Lịch sử trống.")
     else:
@@ -592,10 +614,12 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     parts = txt.split()
 
     if txt == "👤 Tài khoản":
-        u = query("SELECT balance, bank, stk, name, refs, total_bet FROM users WHERE user_id=?", (uid,)).fetchone()
-        if not u: 
+        res = query("SELECT balance, bank, stk, name, refs, total_bet FROM users WHERE user_id=%s", (uid,))
+        if not res: 
             get_user(uid)
             u = (0, None, None, None, 0, 0)
+        else:
+            u = res[0]
         msg = (
             f"👤 **THÔNG TIN TÀI KHOẢN**\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -635,7 +659,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx"), InlineKeyboardButton("💿 XÓC ĐĨA", callback_data="menu_xocdia")],
             [InlineKeyboardButton("🏎️ ĐUA XE (RACE)", callback_data="menu_race"), 
-             InlineKeyboardButton("💣 DÒ MÌN", callback_data="menu_mines")],
+             InlineKeyboardButton("💣 Dò Mìn", callback_data="menu_mines")],
             [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
              InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
             [InlineKeyboardButton("🎰 SLOT / 🏀 KHÁC", callback_data="menu_others")]
@@ -645,21 +669,22 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if txt == "🛒 Rút tiền":
         if check_mt('mt_rut') and uid not in ADMIN_IDS:
             return await user_reply.reply_text("⚙️ Hệ thống Rút Tiền đang bảo trì!")
-        u = query("SELECT bank, stk, name FROM users WHERE user_id=?", (uid,)).fetchone()
-        if not u or not u[0] or not u[1]:
+        res = query("SELECT bank, stk, name FROM users WHERE user_id=%s", (uid,))
+        if not res or not res[0][0] or not res[0][1]:
             await user_reply.reply_text("❌ Bạn chưa liên kết bank.\n👉 Dùng lệnh: `/lienket [Bank] [STK] [Tên]`", parse_mode="Markdown")
         else:
+            u = res[0]
             await user_reply.reply_text(f"🏛 **TÀI KHOẢN RÚT:**\n🏛 Bank: {u[0]}\n💳 STK: `{u[1]}`\n👤 Tên: {u[2]}\n\n👉 Nhập: `/rut [số tiền]`", parse_mode="Markdown")
         return
 
     if txt == "🎁 Checkin":
         today = datetime.now().strftime("%d/%m/%Y")
-        res = query("SELECT last_checkin FROM users WHERE user_id=?", (uid,)).fetchone()
-        if res and res[0] == today:
+        res = query("SELECT last_checkin FROM users WHERE user_id=%s", (uid,))
+        if res and res[0][0] == today:
             await user_reply.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
             return
         add_money(uid, 300, "Daily Checkin") 
-        query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
+        query("UPDATE users SET last_checkin=%s WHERE user_id=%s", (today, uid))
         return await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+300đ`", parse_mode="Markdown")
 
     if txt == "📜 Lịch sử":
@@ -708,8 +733,9 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         target_id = int(parts[2])
         current_page = int(parts[3]) if len(parts) > 3 else 0
         
-        u = query("SELECT balance, refs, bank, stk, name, last_checkin, total_bet FROM users WHERE user_id=?", (target_id,)).fetchone()
-        if not u: return await q.answer("Không tìm thấy user!")
+        res = query("SELECT balance, refs, bank, stk, name, last_checkin, total_bet FROM users WHERE user_id=%s", (target_id,))
+        if not res: return await q.answer("Không tìm thấy user!")
+        u = res[0]
         
         status_text = "🚫 ĐANG CHẶN" if is_banned(target_id) else "🟢 HOẠT ĐỘNG"
         msg = (
@@ -739,13 +765,13 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         tid = int(parts[3])
         page_to_return = int(parts[-1])
         
-        if act == "ban": query("INSERT OR IGNORE INTO banned VALUES(?)", (tid,))
-        elif act == "unban": query("DELETE FROM banned WHERE user_id=?", (tid,))
+        if act == "ban": query("INSERT INTO banned VALUES(%s) ON CONFLICT (user_id) DO NOTHING", (tid,))
+        elif act == "unban": query("DELETE FROM banned WHERE user_id=%s", (tid,))
         elif act == "add": add_money(tid, int(parts[4]), "Admin cộng tiền")
         elif act == "sub": sub_money(tid, int(parts[4]), "Admin trừ tiền")
         
         await q.answer("Thành công!")
-        await handle_callback(update, ctx) 
+        # Fake Callback data to refresh
         q.data = f"adm_manage_{tid}_{page_to_return}"
         return await handle_callback(update, ctx)
 
@@ -753,7 +779,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if uid not in ADMIN_IDS: return
         key = d.replace("tg_", "")
         new_val = 0 if check_mt(key) else 1
-        query("UPDATE settings SET value=? WHERE key=?", (new_val, key))
+        query("UPDATE settings SET value=%s WHERE key=%s", (new_val, key))
         def st(k): return "🔴 OFF" if check_mt(k) else "🟢 ON"
         new_kb = [
             [InlineKeyboardButton(f"🎲 Tài Xỉu 3D: {st('mt_taixiu')}", callback_data="tg_mt_taixiu")],
@@ -1066,7 +1092,8 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     elif d.startswith("hit_wood_"):
         parts = d.split("_")
-        game_id = f"{parts[2]}_{parts[3]}_{parts[4]}"
+        # Reconstruct ID
+        game_id = "_".join(parts[2:])
         game = ctx.user_data.get(game_id)
         if not game or game["status"] != "playing": return
         
@@ -1084,7 +1111,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     elif d.startswith("clm_wood_"):
         parts = d.split("_")
-        game_id = f"{parts[2]}_{parts[3]}_{parts[4]}"
+        game_id = "_".join(parts[2:])
         game = ctx.user_data.get(game_id)
         if game and game["status"] == "playing":
             game["status"] = "claimed"
@@ -1118,6 +1145,6 @@ app.add_handler(CommandHandler("nap", nap_tien_admin))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG - ĐÃ TÍCH HỢP TỔNG CƯỢC & PHÂN TRANG USER!")
+print("BOT ĐÃ SẴN SÀNG TRÊN RAILWAY VỚI POSTGRESQL!")
 app.run_polling()
  
