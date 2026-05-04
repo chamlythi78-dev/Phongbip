@@ -19,7 +19,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 ADMIN_IDS = [7398112999, 8619503816]
 BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 200000 
-WIN_RATE = 90 # Tỉ lệ thắng 90%
+WIN_RATE = 10 # Tỉ lệ thắng 10%
 
 # THÔNG TIN NẠP TIỀN
 BANK_INFO = """
