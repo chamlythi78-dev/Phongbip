@@ -111,7 +111,6 @@ def is_banned(uid):
 
 def add_money(uid, amt, note):
     get_user(uid)
-    # Cập nhật thời gian: Giờ:Phút - Ngày/Tháng/Năm
     now_str = datetime.now().strftime("%H:%M - %d/%m/%Y")
     query("UPDATE users SET balance=balance+? WHERE user_id=?", (amt, uid))
     query("INSERT INTO history VALUES(?,?,?,?)", (uid, amt, note, now_str))
@@ -121,12 +120,10 @@ def sub_money(uid, amt, note="withdraw"):
     bal = get_balance(uid)
     if bal < amt:
         return False
-    # Cập nhật thời gian: Giờ:Phút - Ngày/Tháng/Năm
     now_str = datetime.now().strftime("%H:%M - %d/%m/%Y")
     query("UPDATE users SET balance=balance-? WHERE user_id=?", (amt, uid))
     query("INSERT INTO history VALUES(?,?,?,?)", (uid, -amt, note, now_str))
     
-    # TÍNH TỔNG CƯỢC: Nếu không phải rút tiền hoặc Admin trừ tiền thủ công thì cộng vào tổng cược
     if note != "Rút tiền" and note != "withdraw" and "Admin" not in note:
         query("UPDATE users SET total_bet=total_bet+? WHERE user_id=?", (amt, uid))
         
@@ -331,7 +328,7 @@ async def admin_info(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"📂 **THÔNG TIN CHI TIẾT USER `{target_id}`**\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"💰 Số dư: `{u[0]:,}đ`\n"
-            f"📊 Tổng cược: `{u[6]:,}đ`\n" # Đã thêm tổng cược cho Admin xem
+            f"📊 Tổng cược: `{u[6]:,}đ`\n"
             f"👥 Số người mời: `{u[1]}`\n"
             f"🏛 Ngân hàng: `{u[2] or 'Chưa cập nhật'}`\n"
             f"💳 Số tài khoản: `{u[3] or 'Chưa cập nhật'}`\n"
@@ -393,10 +390,9 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
     if update.effective_user.id not in ADMIN_IDS: return
     
-    limit = 20  # Mỗi trang hiện 20 user
+    limit = 20
     offset = page * limit
     
-    # Lấy danh sách user theo trang
     users = query("SELECT user_id, balance FROM users ORDER BY rowid DESC LIMIT ? OFFSET ?", (limit, offset)).fetchall()
     total_users = query("SELECT COUNT(*) FROM users").fetchone()[0]
     total_pages = (total_users + limit - 1) // limit
@@ -410,7 +406,6 @@ async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
         status = "🚫" if is_banned(u_id) else "🟢"
         kb.append([InlineKeyboardButton(f"{status} ID: {u_id} | {bal:,}đ", callback_data=f"adm_manage_{u_id}_{page}")])
 
-    # Nút điều hướng phân trang
     nav_buttons = []
     if page > 0:
         nav_buttons.append(InlineKeyboardButton("⬅️ Trước", callback_data=f"adm_page_{page-1}"))
@@ -505,13 +500,12 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         query("UPDATE users SET refed=1 WHERE user_id=?", (uid,))
         except: pass
 
-    # MENU CHÍNH
+    # MENU CHÍNH (Đã xóa "Mời bạn")
     menu = ReplyKeyboardMarkup([
         ["🎮 Danh sách game", "👤 Tài khoản"],
         ["💳 Nạp tiền", "🛒 Rút tiền"],
         ["🎁 Checkin", "🎁 Nhận Code Free"],
-        ["📜 Lịch sử", "📧 Mời bạn"],
-        ["📞 Hỗ trợ"]
+        ["📜 Lịch sử", "📞 Hỗ trợ"]
     ], resize_keyboard=True)
 
     welcome_text = (
@@ -607,7 +601,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 ID: `{uid}`\n"
             f"💰 Số dư: `{u[0]:,}đ`\n"
-            f"📊 **Tổng cược:** `{u[5]:,}đ`\n" # ĐÃ CẬP NHẬT TỔNG CƯỢC
+            f"📊 **Tổng cược:** `{u[5]:,}đ`\n"
             f"👥 Đã mời: `{u[4]}` người\n"
             f"🏛 Ngân hàng: `{u[1] or 'Chưa liên kết'}`\n"
             f"💳 STK: `{u[2] or 'Chưa liên kết'}`\n"
@@ -667,14 +661,6 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         add_money(uid, 300, "Daily Checkin") 
         query("UPDATE users SET last_checkin=? WHERE user_id=?", (today, uid))
         return await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+300đ`", parse_mode="Markdown")
-
-    if txt == "📧 Mời bạn":
-        msg = (
-            "🚀 **KIẾM TIỀN TỪ LƯỢT MỜI**\n\n"
-            "💵 1F = `500đ`\n"
-            f"🔗 **Link của bạn:**\n`https://t.me/{BOT_USERNAME}?start={uid}`"
-        )
-        return await user_reply.reply_text(msg, parse_mode="Markdown")
 
     if txt == "📜 Lịch sử":
         return await history_pro(update, ctx)
@@ -746,7 +732,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
         return
 
-    # XỬ LÝ CÁC HÀNH ĐỘNG NHANH TRONG MENU USER
     if d.startswith("adm_act_"):
         if uid not in ADMIN_IDS: return
         parts = d.split("_")
@@ -760,8 +745,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         elif act == "sub": sub_money(tid, int(parts[4]), "Admin trừ tiền")
         
         await q.answer("Thành công!")
-        # Load lại trang chi tiết user đó
-        await handle_callback(update, ctx) # Tái sử dụng logic manage
+        await handle_callback(update, ctx) 
         q.data = f"adm_manage_{tid}_{page_to_return}"
         return await handle_callback(update, ctx)
 
@@ -856,7 +840,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         grid = [0]*12 + [1]*3 
         random.shuffle(grid)
         
-        # Bắt đầu với multiplier là 1.05 cho Dò Mìn
         ctx.user_data[f"mine_{uid}"] = {"grid": grid, "bet": amt, "opened": [], "mult": 1.05, "must_lose": not is_win_game}
         kb = []
         row = []
@@ -882,7 +865,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else: 
             game["opened"].append(idx)
             current_win = int(game["bet"] * game["mult"])
-            # Tăng hệ số theo logic mới
             game["mult"] = get_next_multiplier(game["mult"])
             
             kb = []
@@ -1077,7 +1059,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             break_point = round(random.uniform(1.1, 1.8), 2)
 
         game_id = f"wd_{uid}_{random.randint(100,999)}"
-        # Khởi tạo hệ số 1.0
         ctx.user_data[game_id] = {"status": "playing", "amt": amt, "mult": 1.0, "target": break_point}
         kb = [[InlineKeyboardButton("🪵 GÕ (x1.00)", callback_data=f"hit_wood_{game_id}")],
               [InlineKeyboardButton("💰 RÚT (x1.00)", callback_data=f"clm_wood_{game_id}")]]
@@ -1089,7 +1070,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         game = ctx.user_data.get(game_id)
         if not game or game["status"] != "playing": return
         
-        # Cập nhật hệ số theo logic mới
         game["mult"] = get_next_multiplier(game["mult"])
         
         if game["mult"] >= game["target"]:
@@ -1140,3 +1120,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG - ĐÃ TÍCH HỢP TỔNG CƯỢC & PHÂN TRANG USER!")
 app.run_polling()
+ 
