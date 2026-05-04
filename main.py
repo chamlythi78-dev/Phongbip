@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
-import psycopg2  # Đã đổi từ sqlite3
+import psycopg2  
 from psycopg2 import extras
 from datetime import datetime, timedelta
 import os
@@ -13,13 +13,12 @@ def gen_code():
 
 # ===== CONFIG =====
 TOKEN = os.getenv("BOT_TOKEN")
-# Lấy URL DATABASE từ Railway
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 ADMIN_IDS = [7398112999, 8619503816]
 BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 200000 
-WIN_RATE = 35 # Tỉ lệ thắng 0%
+WIN_RATE = 35 
 
 # THÔNG TIN NẠP TIỀN
 BANK_INFO = """
@@ -38,7 +37,6 @@ def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL, sslmode='require')
     return conn
 
-# Hàm thực thi truy vấn (Đổi ? thành %s)
 def query(q, args=()):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -51,7 +49,6 @@ def query(q, args=()):
     conn.close()
     return res
 
-# Khởi tạo toàn bộ các bảng (Postgres dùng BIGINT cho ID Telegram)
 query("CREATE TABLE IF NOT EXISTS codes (code TEXT PRIMARY KEY, reward INTEGER, uses INTEGER)")
 query("""
 CREATE TABLE IF NOT EXISTS users (
@@ -68,7 +65,6 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 
-# Fix cho database cũ nếu đã tồn tại nhưng chưa có cột total_bet
 try:
     query("ALTER TABLE users ADD COLUMN total_bet BIGINT DEFAULT 0")
 except:
@@ -77,19 +73,17 @@ except:
 query("CREATE TABLE IF NOT EXISTS history (user_id BIGINT, amount BIGINT, note TEXT, time TEXT)")
 query("CREATE TABLE IF NOT EXISTS banned (user_id BIGINT PRIMARY KEY)")
 
-# BẢNG CÀI ĐẶT BẢO TRÌ
 query("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value INTEGER)")
 maintenance_keys = [
     'mt_taixiu', 'mt_duaxe', 'mt_domin', 
     'mt_penalty', 'mt_gomo', 'mt_slot', 
-    'mt_nap', 'mt_rut', 'mt_xocdia'
+    'mt_nap', 'mt_rut', 'mt_xocdia', 'mt_quayso' # Thêm mt_quayso
 ]
 for k in maintenance_keys:
     res = query("SELECT 1 FROM settings WHERE key=%s", (k,))
     if not res:
         query("INSERT INTO settings VALUES(%s, 0)", (k,))
 
-# Hàm kiểm tra trạng thái bảo trì
 def check_mt(key):
     res = query("SELECT value FROM settings WHERE key=%s", (key,))
     return res[0][0] == 1 if res else False
@@ -271,7 +265,6 @@ async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not data:
         await update.message.reply_text("❌ Mã quà tặng không tồn tại.")
         return
-    # Postgres trả về list tuple: data[0] là hàng đầu tiên
     reward, uses = data[0][1], data[0][2]
     if uses <= 0:
         await update.message.reply_text("❌ Mã quà tặng này đã hết lượt sử dụng.")
@@ -292,7 +285,8 @@ async def baotri_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(f"💣 Dò Mìn: {st('mt_domin')}", callback_data="tg_mt_domin")],
         [InlineKeyboardButton(f"⚽ Penalty: {st('mt_penalty')}", callback_data="tg_mt_penalty"), 
          InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
-        [InlineKeyboardButton(f"🎰 Slot/Khác: {st('mt_slot')}", callback_data="tg_mt_slot")],
+        [InlineKeyboardButton(f"🎰 Slot/Khác: {st('mt_slot')}", callback_data="tg_mt_slot"),
+         InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")], # Thêm bảo trì quay số
         [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap"), 
          InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
         [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
@@ -407,11 +401,8 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
     if update.effective_user.id not in ADMIN_IDS: return
-    
     limit = 20
     offset = page * limit
-    
-    # Postgres dùng ctid để thay rowid hoặc order by user_id
     users = query("SELECT user_id, balance FROM users ORDER BY user_id DESC LIMIT %s OFFSET %s", (limit, offset))
     res_total = query("SELECT COUNT(*) FROM users")
     total_users = res_total[0][0] if res_total else 0
@@ -429,17 +420,13 @@ async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
     nav_buttons = []
     if page > 0:
         nav_buttons.append(InlineKeyboardButton("⬅️ Trước", callback_data=f"adm_page_{page-1}"))
-    
     nav_buttons.append(InlineKeyboardButton(f"Trang {page+1}/{total_pages}", callback_data="none"))
-    
     if (page + 1) < total_pages:
         nav_buttons.append(InlineKeyboardButton("Sau ➡️", callback_data=f"adm_page_{page+1}"))
-    
     kb.append(nav_buttons)
     kb.append([InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")])
 
     text = f"👥 **DANH SÁCH NGƯỜI DÙNG** (Tổng: {total_users})\nBấm vào User để xem chi tiết:"
-    
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
     else:
@@ -447,7 +434,7 @@ async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
 
 async def history_all_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
-    data = query("SELECT * FROM history ORDER BY time DESC LIMIT 50") # Giới hạn 50 bản ghi mới nhất để tránh lag
+    data = query("SELECT * FROM history ORDER BY time DESC LIMIT 50") 
     msg = "🌐 **LỊCH SỬ TOÀN HỆ THỐNG:**\n\n"
     if data:
         for d in data:
@@ -521,7 +508,6 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         query("UPDATE users SET refed=1 WHERE user_id=%s", (uid,))
         except: pass
 
-    # MENU CHÍNH
     menu = ReplyKeyboardMarkup([
         ["🎮 Danh sách game", "👤 Tài khoản"],
         ["💳 Nạp tiền", "🛒 Rút tiền"],
@@ -662,7 +648,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton("💣 Dò Mìn", callback_data="menu_mines")],
             [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
              InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
-            [InlineKeyboardButton("🎰 SLOT / 🏀 KHÁC", callback_data="menu_others")]
+            [InlineKeyboardButton("🎰 SLOT / 🏀 KHÁC", callback_data="menu_others"),
+             InlineKeyboardButton("🔢 QUAY SỐ (1-3)", callback_data="menu_qs")] # Thêm nút Quay Số
         ])
         return await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
 
@@ -693,7 +680,6 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if txt == "📞 Hỗ trợ":
         return await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! Hoặc NT CHO @cskhzen88uytin")
 
-    # --- LOGIC CƯỢC NHANH ---
     if len(parts) == 2 and parts[1].isdigit():
         code, amt = parts[0].upper(), int(parts[1])
         if code in ["XXC", "XXL", "XXX", "XXT"]:
@@ -719,14 +705,12 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     d = q.data
     uid = q.from_user.id
     
-    # XỬ LÝ PHÂN TRANG CHO ADMIN
     if d.startswith("adm_page_"):
         if uid not in ADMIN_IDS: return
         new_page = int(d.split("_")[2])
         await all_user(update, ctx, page=new_page)
         return
 
-    # XỬ LÝ QUAY LẠI MENU CHI TIẾT USER
     if d.startswith("adm_manage_"):
         if uid not in ADMIN_IDS: return
         parts = d.split("_")
@@ -771,7 +755,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         elif act == "sub": sub_money(tid, int(parts[4]), "Admin trừ tiền")
         
         await q.answer("Thành công!")
-        # Fake Callback data to refresh
         q.data = f"adm_manage_{tid}_{page_to_return}"
         return await handle_callback(update, ctx)
 
@@ -788,7 +771,8 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton(f"💣 Dò Mìn: {st('mt_domin')}", callback_data="tg_mt_domin")],
             [InlineKeyboardButton(f"⚽ Penalty: {st('mt_penalty')}", callback_data="tg_mt_penalty"), 
              InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
-            [InlineKeyboardButton(f"🎰 Slot/Khác: {st('mt_slot')}", callback_data="tg_mt_slot")],
+            [InlineKeyboardButton(f"🎰 Slot/Khác: {st('mt_slot')}", callback_data="tg_mt_slot"),
+             InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")], # Cập nhật bảo trì
             [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap"), 
              InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
             [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
@@ -815,6 +799,52 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             add_money(u_id, amt, "Hoàn tiền rút")
             await ctx.bot.send_message(u_id, "❌ Yêu cầu rút tiền bị từ chối. Tiền đã được hoàn lại.")
             await q.edit_message_text(f"❌ TỪ CHỐI ID {u_id}")
+
+    # ===== GAME QUAY SỐ (MỚI THÊM) =====
+    elif d == "menu_qs":
+        if check_mt('mt_quayso') and uid not in ADMIN_IDS:
+            return await ctx.bot.send_message(uid, "⚙️ Game Quay Số đang bảo trì!")
+        kb = []
+        row = []
+        for i, a in enumerate(amounts):
+            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"set_qs_{a}"))
+            if (i + 1) % 4 == 0: kb.append(row); row = []
+        await q.edit_message_text("🔢 **QUAY SỐ MAY MẮN (1-3)**\nChọn số và nhận thưởng x2.8!\nVui lòng chọn mức cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("set_qs_"):
+        amt = int(d.split("_")[2])
+        kb = [
+            [InlineKeyboardButton("1️⃣ SỐ 1", callback_data=f"p_qs_1_{amt}"), 
+             InlineKeyboardButton("2️⃣ SỐ 2", callback_data=f"p_qs_2_{amt}"),
+             InlineKeyboardButton("3️⃣ SỐ 3", callback_data=f"p_qs_3_{amt}")],
+            [InlineKeyboardButton("🔙 Quay lại", callback_data="menu_qs")]
+        ]
+        await q.edit_message_text(f"🔢 **CHỌN CON SỐ MAY MẮN**\n💰 Cược: `{amt:,}đ`\n📈 Hệ số nhân: **x2.8**", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("p_qs_"):
+        parts = d.split("_")
+        choice, amt = int(parts[2]), int(parts[3])
+        if not sub_money(uid, amt, f"Cược Quay Số {choice}"):
+            return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
+        
+        msg_qs = await ctx.bot.send_message(uid, "🌀 **ĐANG QUAY SỐ...**")
+        await asyncio.sleep(2)
+        
+        is_win_qs = should_win()
+        if is_win_qs:
+            result_qs = choice
+        else:
+            result_qs = random.choice([n for n in [1, 2, 3] if n != choice])
+        
+        if choice == result_qs:
+            win_amt = int(amt * 2.8)
+            add_money(uid, win_amt, f"Thắng Quay Số {choice}")
+            status = f"🎉 **CHIẾN THẮNG!**\n💎 Kết quả ra số: **{result_qs}**\n💰 Nhận: `+{win_amt:,}đ`"
+        else:
+            status = f"💀 **THẤT BẠI!**\n❌ Kết quả ra số: **{result_qs}**\n👉 Bạn đã chọn số: **{choice}**"
+        
+        await msg_qs.edit_text(f"📊 **KẾT QUẢ QUAY SỐ**\n━━━━━━━━━━━━━━━━━━━━━\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
+        return
 
     elif d == "menu_race":
         if check_mt('mt_duaxe') and uid not in ADMIN_IDS:
@@ -1092,7 +1122,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     elif d.startswith("hit_wood_"):
         parts = d.split("_")
-        # Reconstruct ID
         game_id = "_".join(parts[2:])
         game = ctx.user_data.get(game_id)
         if not game or game["status"] != "playing": return
