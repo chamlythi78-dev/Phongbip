@@ -1366,8 +1366,6 @@ app.add_handler(CommandHandler("rep", reply_user))
 app.add_handler(CommandHandler("check", check_user_history))
 app.add_handler(CommandHandler("info", admin_info)) 
 app.add_handler(CommandHandler("nap", nap_tien_admin))
-
-# ĐĂNG KÝ 4 LỆNH MỚI VÀO HỆ THỐNG
 app.add_handler(CommandHandler("soduall", soduall_cmd))
 app.add_handler(CommandHandler("tileall", tileall_cmd))
 app.add_handler(CommandHandler("xoalsall", xoalsall_cmd))
