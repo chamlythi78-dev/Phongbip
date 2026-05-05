@@ -65,10 +65,8 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 
-# Bảng lưu tỉ lệ thắng cho từng game
 query("CREATE TABLE IF NOT EXISTS game_rates (id INTEGER PRIMARY KEY, name TEXT, rate INTEGER)")
 
-# Thiết lập tỉ lệ mặc định 10% cho 9 loại game nếu chưa có
 default_game_names = [
     "TÀI XỈU", "XÓC ĐĨA", "ĐUA XE", "DÒ MÌN", 
     "PENALTY", "GÕ MÕ", "SLOT KHÁC", "QUAY SỐ", "BẦU CUA"
@@ -110,7 +108,6 @@ def check_mt(key):
     res = query("SELECT value FROM settings WHERE key=%s", (key,))
     return res[0][0] == 1 if res else False
 
-# ===== HÀM TÍNH HỆ SỐ NHÂN MỚI (UPDATE) =====
 def get_next_multiplier(current_mult):
     if current_mult < 1.05:
         return 1.05
@@ -153,8 +150,55 @@ def sub_money(uid, amt, note="withdraw"):
     
     if note != "Rút tiền" and note != "withdraw" and "Admin" not in note:
         query("UPDATE users SET total_bet=total_bet+%s WHERE user_id=%s", (amt, uid))
-        
     return True
+
+# ======================================================
+# ===== CÁC LỆNH MỚI ĐƯỢC THÊM VÀO ĐÂY (NEW) =====
+# ======================================================
+
+async def soduall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    users = query("SELECT user_id, balance FROM users WHERE balance > 0 ORDER BY balance DESC")
+    if not users:
+        return await update.message.reply_text("Hiện không có ai có số dư lớn hơn 0.")
+    
+    text = "💰 **DANH SÁCH SỐ DƯ TẤT CẢ ID:**\n"
+    for u in users:
+        text += f"ID: `{u[0]}` | Số dư: `{u[1]:,}đ`\n"
+    
+    if len(text) > 4000:
+        for x in range(0, len(text), 4000):
+            await update.message.reply_text(text[x:x+4000], parse_mode="Markdown")
+    else:
+        await update.message.reply_text(text, parse_mode="Markdown")
+
+async def tileall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    rates = query("SELECT id, name, rate FROM game_rates ORDER BY id ASC")
+    text = "📊 **TỈ LỆ THẮNG TẤT CẢ GAME:**\n\n"
+    for r in rates:
+        text += f"🆔 `{r[0]}` | {r[1]}: `{r[2]}%` thắng\n"
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+async def xoalsall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    query("DELETE FROM history")
+    await update.message.reply_text("✅ Đã xoá toàn bộ lịch sử cược, nạp và rút của hệ thống!")
+
+async def xoals_user_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    if not ctx.args:
+        return await update.message.reply_text("❌ Cú pháp: `/xoals [ID]`")
+    try:
+        uid = int(ctx.args[0])
+        query("DELETE FROM history WHERE user_id=%s", (uid,))
+        await update.message.reply_text(f"✅ Đã xoá sạch lịch sử của người dùng: `{uid}`", parse_mode="Markdown")
+    except:
+        await update.message.reply_text("❌ ID không hợp lệ.")
+
+# ======================================================
+# ===== KẾT THÚC CÁC LỆNH MỚI =====
+# ======================================================
 
 # ===== LOGIC GAMES ANIMATION =====
 
@@ -221,15 +265,7 @@ async def play_dice_animation(update: Update, choice_code, amount):
     
     c = choice_code.upper()
     is_chan, is_tai = (total % 2 == 0), (total >= 11)
-    
-    # ID 1 TÀI XỈU
     is_win = check_win_by_id(1)
-    
-    res_type = "XXT" if is_tai else "XXX"
-    res_chan_le = "XXC" if is_chan else "XXL"
-    
-    # Nếu Admin ép thua, bot sẽ đổi kết quả ảo nếu cần (logic dice animation telegram mặc định ngẫu nhiên)
-    # Tuy nhiên vì telegram dice là thật, ta sẽ tính win dựa trên check_win_by_id(1)
     
     win = False
     if is_win:
@@ -237,7 +273,7 @@ async def play_dice_animation(update: Update, choice_code, amount):
            (c == "XXX" and not is_tai) or (c == "XXT" and is_tai):
             win = True
     else:
-        win = False # Ép thua
+        win = False 
 
     await asyncio.sleep(4)
 
@@ -256,7 +292,7 @@ async def play_emoji_game(update: Update, game_type, amount):
     if not sub_money(uid, amount, f"Cược {game_type}"):
         return await update.message.reply_text("❌ Bạn không đủ số dư.")
 
-    is_win = check_win_by_id(7) # ID 7 SLOT KHÁC
+    is_win = check_win_by_id(7) 
     emojis = {"SLOT": "🎰", "BALL": "⚽️", "RO": "🏀"}
     msg_game = await update.message.reply_dice(emoji=emojis[game_type])
     
@@ -283,7 +319,6 @@ async def play_emoji_game(update: Update, game_type, amount):
     else: res = "💀 **THUA RỒI!**"
     await update.message.reply_text(f"🕹 KQ: {value}\n{res}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
 
-# ===== LỆNH NHẬP CODE =====
 async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
@@ -600,7 +635,6 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(welcome_text, reply_markup=menu, parse_mode="Markdown")
 
-# ===== LỆNH LIÊN KẾT =====
 async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
@@ -615,7 +649,6 @@ async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query("UPDATE users SET bank=%s, stk=%s, name=%s WHERE user_id=%s", (bank, stk, name, uid))
     await update.message.reply_text(f"✅ **LIÊN KẾT THÀNH CÔNG**\n\n🏛 Ngân hàng: {bank}\n💳 STK: `{stk}`\n👤 Chủ TK: {name}\n\n⚠️ *Thông tin này đã được khóa để bảo mật.*", parse_mode="Markdown")
 
-# ===== RÚT TIỀN =====
 async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
@@ -645,7 +678,6 @@ async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except: 
         await update.message.reply_text("❌ Số tiền không hợp lệ.")
 
-# ===== LỊCH SỬ CHO NGƯỜI DÙNG =====
 async def history_pro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     data = query("SELECT amount, note, time FROM history WHERE user_id=%s ORDER BY time DESC LIMIT 20", (uid,))
@@ -669,7 +701,6 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_reply = update.message
     parts = txt.split()
 
-    # CẬP NHẬT GIAO DIỆN TÀI KHOẢN (THÊM 2 NÚT BẤM)
     if txt == "👤 Tài khoản":
         res = query("SELECT balance, bank, stk, name, refs, total_bet FROM users WHERE user_id=%s", (uid,))
         if not res: 
@@ -783,13 +814,11 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     d = q.data
     uid = q.from_user.id
     
-    # 1. XỬ LÝ RESET TOÀN BỘ (DÀNH CHO ADMIN)
     if d == "confirm_reset_all_final":
         if uid not in ADMIN_IDS: return
         query("TRUNCATE users, history, codes, banned RESTART IDENTITY CASCADE")
         return await q.edit_message_text("✅ **HỆ THỐNG ĐÃ ĐƯỢC RESET SẠCH DỮ LIỆU!**")
 
-    # 2. XỬ LÝ XEM LỊCH SỬ NHANH
     elif d == "his_deposit":
         data = query("SELECT amount, note, time FROM history WHERE user_id=%s AND amount > 0 ORDER BY time DESC LIMIT 10", (uid,))
         text = "📥 **10 GIAO DỊCH NẠP GẦN NHẤT:**\n\n"
@@ -932,7 +961,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         
         msg_bc = await ctx.bot.send_message(uid, "🎲 **ĐANG LẮC BẦU CUA...**")
         
-        # ID 9 BẦU CUA
         is_win_bc = check_win_by_id(9)
         if is_win_bc:
             res1 = choice_idx
@@ -996,7 +1024,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         msg_qs = await ctx.bot.send_message(uid, "🌀 **ĐANG QUAY SỐ...**")
         await asyncio.sleep(2)
         
-        # ID 8 QUAY SỐ
         is_win_qs = check_win_by_id(8)
         if is_win_qs:
             result_qs = choice
@@ -1059,7 +1086,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         amt = int(d.split("_")[2])
         if not sub_money(uid, amt, "Cược Dò Mìn"): return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
         
-        # ID 4 DÒ MÌN
         is_win_game = check_win_by_id(4)
         grid = [0]*12 + [1]*3 
         random.shuffle(grid)
@@ -1154,12 +1180,9 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             msg_status = await ctx.bot.send_message(uid, frames[0], parse_mode="Markdown")
             for f in frames[1:]:
                 await asyncio.sleep(0.4)
-                try: 
-                    await msg_status.edit_text(f + "\n⚡️ ĐANG LẮC...")
-                except: 
-                    pass
+                try: await msg_status.edit_text(f + "\n⚡️ ĐANG LẮC...")
+                except: pass
 
-            # ID 2 XÓC ĐĨA
             is_win_game = check_win_by_id(2)
             if is_win_game:
                 win_sets = {"chan":[[1,1,0,0],[1,1,1,1],[0,0,0,0]], "le":[[1,0,0,0],[1,1,1,0]], "3d":[[1,1,1,0]], "3t":[[1,0,0,0]], "4d":[[1,1,1,1]], "4t":[[0,0,0,0]]}
@@ -1203,7 +1226,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         if game == "ba":
             sub_money(uid, amt, f"Cược Penalty")
-            # ID 5 PENALTY
             is_win = check_win_by_id(5)
             player_choice = int(choice)
             if is_win:
@@ -1242,12 +1264,8 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             results = [d1.dice.value, d2.dice.value, d3.dice.value]
             total = sum(results)
             res_type = "tai" if total >= 11 else "xiu"
-            
-            # ID 1 TÀI XỈU
             is_win_check = check_win_by_id(1)
             
-            # Vì telegram dice là thật nên kết quả 'res_type' đã có sẵn. 
-            # Ta chỉ tính Win khi và chỉ khi kết quả xúc xắc khớp với lựa chọn VÀ tỉ lệ thắng cho phép.
             win = (choice == res_type and is_win_check)
 
             await asyncio.sleep(4)
@@ -1283,7 +1301,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not sub_money(uid, amt, "Cược Gõ Mõ"): 
             return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
         
-        # ID 6 GÕ MÕ
         is_win_wood = check_win_by_id(6)
         if is_win_wood:
             break_point = round(random.uniform(3.0, 10.0), 2)
@@ -1331,7 +1348,7 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("baotri", baotri_cmd))
 app.add_handler(CommandHandler("code", nhap_code))
 app.add_handler(CommandHandler("taocode", tao_code))
-app.add_handler(CommandHandler("tilewin", tilewin_cmd)) # ĐĂNG KÝ LỆNH TILEWIN
+app.add_handler(CommandHandler("tilewin", tilewin_cmd)) 
 app.add_handler(CommandHandler("rut", rut))
 app.add_handler(CommandHandler("lienket", lien_ket))
 app.add_handler(CommandHandler("resetbank", reset_bank))
@@ -1349,9 +1366,16 @@ app.add_handler(CommandHandler("rep", reply_user))
 app.add_handler(CommandHandler("check", check_user_history))
 app.add_handler(CommandHandler("info", admin_info)) 
 app.add_handler(CommandHandler("nap", nap_tien_admin))
+
+# ĐĂNG KÝ 4 LỆNH MỚI VÀO HỆ THỐNG
+app.add_handler(CommandHandler("soduall", soduall_cmd))
+app.add_handler(CommandHandler("tileall", tileall_cmd))
+app.add_handler(CommandHandler("xoalsall", xoalsall_cmd))
+app.add_handler(CommandHandler("xoals", xoals_user_cmd))
+
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG VỚI TÍNH NĂNG ĐIỀU CHỈNH TỈ LỆ THẮNG!")
+print("BOT ĐÃ SẴN SÀNG VỚI CÁC LỆNH QUẢN LÝ MỚI!")
 app.run_polling()
 
