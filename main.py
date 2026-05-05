@@ -275,6 +275,28 @@ async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ===== ADMIN COMMANDS =====
 
+async def reset_all(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⚠️ XÁC NHẬN RESET", callback_data="confirm_reset_all"),
+            InlineKeyboardButton("❌ HỦY", callback_data="cancel_reset_all")
+        ]
+    ])
+
+    await update.message.reply_text(
+        "⚠️ **CẢNH BÁO NGUY HIỂM** ⚠️\n\n"
+        "Bạn sắp xóa TOÀN BỘ dữ liệu hệ thống:\n"
+        "- Người dùng\n"
+        "- Số dư\n"
+        "- Lịch sử\n"
+        "- Code\n\n"
+        "👉 Hành động này KHÔNG THỂ HOÀN TÁC!",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
 async def baotri_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     def st(k): return "🔴 OFF" if check_mt(k) else "🟢 ON"
@@ -700,6 +722,26 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await user_reply.reply_text("✅ Đã gửi yêu cầu tới Admin!")
 
 # ===== CALLBACK HANDLER (GAMES & WITHDRAW) =====
+# ===== RESET ALL SYSTEM =====
+if d == "confirm_reset_all":
+    if uid not in ADMIN_IDS:
+        return
+
+    query("DELETE FROM users")
+    query("DELETE FROM history")
+    query("DELETE FROM codes")
+    query("DELETE FROM banned")
+
+    for k in [
+        'mt_taixiu','mt_duaxe','mt_domin','mt_penalty',
+        'mt_gomo','mt_slot','mt_nap','mt_rut','mt_xocdia','mt_quayso'
+    ]:
+        query("UPDATE settings SET value=0 WHERE key=%s", (k,))
+
+    await q.edit_message_text("💀 ĐÃ RESET TOÀN BỘ HỆ THỐNG!")
+
+elif d == "cancel_reset_all":
+    await q.edit_message_text("❌ Đã hủy reset.")
 async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     d = q.data
@@ -1173,6 +1215,7 @@ app.add_handler(CommandHandler("info", admin_info))
 app.add_handler(CommandHandler("nap", nap_tien_admin))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
+app.add_handler(CommandHandler("resetall", reset_all))
 
 print("BOT ĐÃ SẴN SÀNG TRÊN RAILWAY VỚI POSTGRESQL!")
 app.run_polling()
