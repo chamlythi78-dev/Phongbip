@@ -77,7 +77,7 @@ query("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value INTEGER)
 maintenance_keys = [
     'mt_taixiu', 'mt_duaxe', 'mt_domin', 
     'mt_penalty', 'mt_gomo', 'mt_slot', 
-    'mt_nap', 'mt_rut', 'mt_xocdia', 'mt_quayso' # Thêm mt_quayso
+    'mt_nap', 'mt_rut', 'mt_xocdia', 'mt_quayso', 'mt_baucua' # Đã thêm mt_baucua
 ]
 for k in maintenance_keys:
     res = query("SELECT 1 FROM settings WHERE key=%s", (k,))
@@ -286,7 +286,8 @@ async def baotri_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(f"⚽ Penalty: {st('mt_penalty')}", callback_data="tg_mt_penalty"), 
          InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
         [InlineKeyboardButton(f"🎰 Slot/Khác: {st('mt_slot')}", callback_data="tg_mt_slot"),
-         InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")], # Thêm bảo trì quay số
+         InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")],
+        [InlineKeyboardButton(f"🦀 Bầu Cua: {st('mt_baucua')}", callback_data="tg_mt_baucua")], # Thêm dòng bảo trì Bầu Cua
         [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap"), 
          InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
         [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
@@ -649,7 +650,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
              InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
             [InlineKeyboardButton("🎰 SLOT / 🏀 KHÁC", callback_data="menu_others"),
-             InlineKeyboardButton("🔢 QUAY SỐ (1-3)", callback_data="menu_qs")] # Thêm nút Quay Số
+             InlineKeyboardButton("🔢 QUAY SỐ (1-3)", callback_data="menu_qs")],
+            [InlineKeyboardButton("🦀 BẦU CUA TÔM CÁ", callback_data="menu_bc")] # Thêm nút Bầu Cua vào menu
         ])
         return await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
 
@@ -772,7 +774,8 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"⚽ Penalty: {st('mt_penalty')}", callback_data="tg_mt_penalty"), 
              InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
             [InlineKeyboardButton(f"🎰 Slot/Khác: {st('mt_slot')}", callback_data="tg_mt_slot"),
-             InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")], # Cập nhật bảo trì
+             InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")],
+            [InlineKeyboardButton(f"🦀 Bầu Cua: {st('mt_baucua')}", callback_data="tg_mt_baucua")], # Cập nhật bảo trì Bầu Cua
             [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap"), 
              InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
             [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
@@ -800,7 +803,70 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ctx.bot.send_message(u_id, "❌ Yêu cầu rút tiền bị từ chối. Tiền đã được hoàn lại.")
             await q.edit_message_text(f"❌ TỪ CHỐI ID {u_id}")
 
-    # ===== GAME QUAY SỐ (MỚI THÊM) =====
+    # ===== GAME BẦU CUA (MỚI THÊM) =====
+    elif d == "menu_bc":
+        if check_mt('mt_baucua') and uid not in ADMIN_IDS:
+            return await ctx.bot.send_message(uid, "⚙️ Game Bầu Cua đang bảo trì!")
+        kb = []
+        row = []
+        for i, a in enumerate(amounts):
+            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"set_bc_{a}"))
+            if (i + 1) % 4 == 0: kb.append(row); row = []
+        await q.edit_message_text("🦀 **BẦU CUA TÔM CÁ**\nChọn mức cược của bạn:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("set_bc_"):
+        amt = int(d.split("_")[2])
+        kb = [
+            [InlineKeyboardButton("🦌 NAI", callback_data=f"p_bc_0_{amt}"), InlineKeyboardButton("🦀 CUA", callback_data=f"p_bc_1_{amt}"), InlineKeyboardButton("🐟 CÁ", callback_data=f"p_bc_2_{amt}")],
+            [InlineKeyboardButton("🐯 HỔ", callback_data=f"p_bc_3_{amt}"), InlineKeyboardButton("🦐 TÔM", callback_data=f"p_bc_4_{amt}"), InlineKeyboardButton("🍐 BẦU", callback_data=f"p_bc_5_{amt}")],
+            [InlineKeyboardButton("🔙 Quay lại", callback_data="menu_bc")]
+        ]
+        await q.edit_message_text(f"🦀 **BẦU CUA**\n💰 Cược: `{amt:,}đ`\n👇 Chọn linh vật bạn đặt cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("p_bc_"):
+        parts = d.split("_")
+        choice_idx, amt = int(parts[2]), int(parts[3])
+        items = ["🦌 NAI", "🦀 CUA", "🐟 CÁ", "🐯 HỔ", "🦐 TÔM", "🍐 BẦU"]
+        
+        if not sub_money(uid, amt, f"Cược Bầu Cua {items[choice_idx]}"):
+            return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
+        
+        msg_bc = await ctx.bot.send_message(uid, "🎲 **ĐANG LẮC BẦU CUA...**")
+        
+        is_win_bc = should_win()
+        if is_win_bc:
+            res1 = choice_idx
+            res2 = random.randint(0, 5)
+            res3 = random.randint(0, 5)
+        else:
+            pool = [i for i in range(6) if i != choice_idx]
+            res1, res2, res3 = random.choices(pool, k=3)
+
+        results = [res1, res2, res3]
+        random.shuffle(results)
+        match_count = results.count(choice_idx)
+        
+        await asyncio.sleep(2)
+        res_str = " | ".join([items[i] for i in results])
+        
+        if match_count > 0:
+            rate = 1 + match_count
+            win_amt = int(amt * rate * 0.95) 
+            add_money(uid, win_amt, f"Thắng Bầu Cua {items[choice_idx]} x{match_count}")
+            status = f"🎉 **THẮNG X{match_count}!**\n💰 Nhận: `+{win_amt:,}đ`"
+        else:
+            status = f"💀 **THẤT BẠI!**\n❌ Không có con **{items[choice_idx]}** nào."
+
+        await msg_bc.edit_text(
+            f"📊 **KẾT QUẢ BẦU CUA**\n━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✨ Kết quả: **{res_str}**\n"
+            f"👉 Bạn chọn: **{items[choice_idx]}**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n{status}\n"
+            f"💰 Số dư: `{get_balance(uid):,}đ`", 
+            parse_mode="Markdown"
+        )
+        return
+
     elif d == "menu_qs":
         if check_mt('mt_quayso') and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, "⚙️ Game Quay Số đang bảo trì!")
@@ -1176,5 +1242,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG TRÊN RAILWAY VỚI POSTGRESQL!")
 app.run_polling()
- 
 
