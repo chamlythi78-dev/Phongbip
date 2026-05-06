@@ -69,7 +69,7 @@ query("CREATE TABLE IF NOT EXISTS game_rates (id INTEGER PRIMARY KEY, name TEXT,
 
 default_game_names = [
     "TÀI XỈU", "XÓC ĐĨA", "ĐUA XE", "DÒ MÌN", 
-    "PENALTY", "GÕ MÕ", "SLOT KHÁC", "QUAY SỐ", "BẦU CUA"
+    "PENALTY", "GÕ MÕ", "QUAY SỐ", "BẦU CUA"
 ]
 for i, name in enumerate(default_game_names, 1):
     res = query("SELECT 1 FROM game_rates WHERE id=%s", (i,))
@@ -87,8 +87,8 @@ query("CREATE TABLE IF NOT EXISTS banned (user_id BIGINT PRIMARY KEY)")
 query("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value INTEGER)")
 maintenance_keys = [
     'mt_taixiu', 'mt_duaxe', 'mt_domin', 
-    'mt_penalty', 'mt_gomo', 'mt_slot', 
-    'mt_nap', 'mt_rut', 'mt_xocdia', 'mt_quayso', 'mt_baucua'
+    'mt_penalty', 'mt_gomo', 'mt_nap', 'mt_rut', 
+    'mt_xocdia', 'mt_quayso', 'mt_baucua'
 ]
 for k in maintenance_keys:
     res = query("SELECT 1 FROM settings WHERE key=%s", (k,))
@@ -152,10 +152,7 @@ def sub_money(uid, amt, note="withdraw"):
         query("UPDATE users SET total_bet=total_bet+%s WHERE user_id=%s", (amt, uid))
     return True
 
-# ======================================================
-# ===== CÁC LỆNH MỚI ĐƯỢC THÊM VÀO ĐÂY (NEW) =====
-# ======================================================
-
+# ===== ADMIN COMMANDS =====
 async def soduall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     users = query("SELECT user_id, balance FROM users WHERE balance > 0 ORDER BY balance DESC")
@@ -196,12 +193,7 @@ async def xoals_user_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ ID không hợp lệ.")
 
-# ======================================================
-# ===== KẾT THÚC CÁC LỆNH MỚI =====
-# ======================================================
-
 # ===== LOGIC GAMES ANIMATION =====
-
 async def play_car_race(update: Update, ctx: ContextTypes.DEFAULT_TYPE, choice, amt):
     uid = update.effective_user.id
     track_length = 12
@@ -287,38 +279,6 @@ async def play_dice_animation(update: Update, choice_code, amount):
     res_str = "-".join(map(str, results))
     await msg_status.edit_text(f"🎲 Kết quả: **{res_str}** => **{total}**\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
 
-async def play_emoji_game(update: Update, game_type, amount):
-    uid = update.effective_user.id
-    if not sub_money(uid, amount, f"Cược {game_type}"):
-        return await update.message.reply_text("❌ Bạn không đủ số dư.")
-
-    is_win = check_win_by_id(7) 
-    emojis = {"SLOT": "🎰", "BALL": "⚽️", "RO": "🏀"}
-    msg_game = await update.message.reply_dice(emoji=emojis[game_type])
-    
-    if is_win:
-        if game_type == "SLOT": value = 64
-        elif game_type == "BALL": value = 5
-        elif game_type == "RO": value = 5
-    else:
-        if game_type == "SLOT": value = 2
-        elif game_type == "BALL": value = 1
-        elif game_type == "RO": value = 1
-    
-    await asyncio.sleep(4)
-
-    win, rate = False, 1.95
-    if game_type == "SLOT" and value in [1, 22, 43, 64]: win, rate = True, 10.0
-    elif game_type == "BALL" and value in [3, 4, 5]: win = True
-    elif game_type == "RO" and value in [4, 5]: win = True
-
-    if win:
-        win_amt = int(amount * rate)
-        add_money(uid, win_amt, f"Thắng {game_type}")
-        res = f"🎉 **THẮNG** | Nhận: `+{win_amt:,}đ`"
-    else: res = "💀 **THUA RỒI!**"
-    await update.message.reply_text(f"🕹 KQ: {value}\n{res}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
-
 async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
@@ -338,8 +298,7 @@ async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query("UPDATE codes SET uses=uses-1 WHERE code=%s", (code_str,))
     await update.message.reply_text(f"🎉 **NHẬN QUÀ THÀNH CÔNG!**\n\n💰 Bạn nhận được: `+{reward:,}đ`", parse_mode="Markdown")
 
-# ===== ADMIN COMMANDS =====
-
+# ===== ADMIN COMMANDS (CONT) =====
 async def tilewin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     try:
@@ -361,8 +320,7 @@ async def tilewin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "⚠️ **HƯỚNG DẪN CHỈNH TỈ LỆ**\n"
             "Cú pháp: `/tilewin [Số_ID] [Tỉ_lệ]`\n\n"
             "1. TÀI XỈU\n2. XÓC ĐĨA\n3. ĐUA XE\n4. DÒ MÌN\n"
-            "5. PENALTY\n6. GÕ MÕ\n7. SLOT KHÁC\n"
-            "8. QUAY SỐ\n9. BẦU CUA\n\n"
+            "5. PENALTY\n6. GÕ MÕ\n7. QUAY SỐ\n8. BẦU CUA\n\n"
             "VD: `/tilewin 1 50` (Chỉnh Tài Xỉu thắng 50%)"
         )
         await update.message.reply_text(msg, parse_mode="Markdown")
@@ -377,9 +335,8 @@ async def baotri_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(f"💣 Dò Mìn: {st('mt_domin')}", callback_data="tg_mt_domin")],
         [InlineKeyboardButton(f"⚽ Penalty: {st('mt_penalty')}", callback_data="tg_mt_penalty"), 
          InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
-        [InlineKeyboardButton(f"🎰 Slot/Khác: {st('mt_slot')}", callback_data="tg_mt_slot"),
-         InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")],
-        [InlineKeyboardButton(f"🦀 Bầu Cua: {st('mt_baucua')}", callback_data="tg_mt_baucua")], 
+        [InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso"),
+         InlineKeyboardButton(f"🦀 Bầu Cua: {st('mt_baucua')}", callback_data="tg_mt_baucua")], 
         [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap"), 
          InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
         [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
@@ -756,9 +713,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton("💣 Dò Mìn", callback_data="menu_mines")],
             [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
              InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
-            [InlineKeyboardButton("🎰 SLOT / 🏀 KHÁC", callback_data="menu_others"),
-             InlineKeyboardButton("🔢 QUAY SỐ (1-3)", callback_data="menu_qs")],
-            [InlineKeyboardButton("🦀 BẦU CUA TÔM CÁ", callback_data="menu_bc")]
+            [InlineKeyboardButton("🔢 QUAY SỐ (1-3)", callback_data="menu_qs"),
+             InlineKeyboardButton("🦀 BẦU CUA TÔM CÁ", callback_data="menu_bc")]
         ])
         return await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
 
@@ -795,12 +751,6 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             if check_mt('mt_taixiu') and uid not in ADMIN_IDS:
                 return await update.message.reply_text("⚙️ Game Tài Xỉu đang bảo trì!")
             return await play_dice_animation(update, code, amt)
-        if code in ["SLOT", "BALL", "RÔ"]:
-            if check_mt('mt_slot') and uid not in ADMIN_IDS:
-                return await update.message.reply_text("⚙️ Game này đang bảo trì!")
-            if code == "SLOT": return await play_emoji_game(update, "SLOT", amt)
-            if code == "BALL": return await play_emoji_game(update, "BALL", amt)
-            if code == "RÔ": return await play_emoji_game(update, "RO", amt)
 
     if uid not in ADMIN_IDS:
         for aid in ADMIN_IDS:
@@ -901,7 +851,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton(f"💣 Dò Mìn: {st('mt_domin')}", callback_data="tg_mt_domin")],
             [InlineKeyboardButton(f"⚽ Penalty: {st('mt_penalty')}", callback_data="tg_mt_penalty")], 
             [InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
-            [InlineKeyboardButton(f"🎰 Slot/Khác: {st('mt_slot')}", callback_data="tg_mt_slot")],
             [InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")],
             [InlineKeyboardButton(f"🦀 Bầu Cua: {st('mt_baucua')}", callback_data="tg_mt_baucua")],
             [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap")], 
@@ -961,7 +910,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         
         msg_bc = await ctx.bot.send_message(uid, "🎲 **ĐANG LẮC BẦU CUA...**")
         
-        is_win_bc = check_win_by_id(9)
+        is_win_bc = check_win_by_id(8) # ID Bầu Cua
         if is_win_bc:
             res1 = choice_idx
             res2 = random.randint(0, 5)
@@ -1024,7 +973,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         msg_qs = await ctx.bot.send_message(uid, "🌀 **ĐANG QUAY SỐ...**")
         await asyncio.sleep(2)
         
-        is_win_qs = check_win_by_id(8)
+        is_win_qs = check_win_by_id(7) # ID Quay Số
         if is_win_qs:
             result_qs = choice
         else:
@@ -1147,11 +1096,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             if (i + 1) % 4 == 0: kb.append(row); row = []
         await q.edit_message_text(f"{g_name}\n👇 Chọn mức tiền cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-    elif d == "menu_others":
-        if check_mt('mt_slot') and uid not in ADMIN_IDS:
-            return await ctx.bot.send_message(uid, "⚙️ Các trò chơi này đang bảo trì!")
-        await q.edit_message_text("🎮 **TRÒ CHƠI KHÁC**\nNhập cú pháp tay để chơi:\n- `SLOT [Tiền]`\n- `RÔ [Tiền]`\n- `BALL [Tiền]`", parse_mode="Markdown")
-
     elif d.startswith("set_"):
         _, game, amt = d.split("_")
         if game == "tx":
@@ -1159,8 +1103,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         elif game == "xd":
             kb = [
                 [InlineKeyboardButton("🔴 CHẴN (x1.95)", callback_data=f"p_xd_chan_{amt}"), InlineKeyboardButton("⚪️ LẺ (x1.95)", callback_data=f"p_xd_le_{amt}")],
-                [InlineKeyboardButton("3 ĐỎ (x4)", callback_data=f"p_xd_3d_{amt}"), InlineKeyboardButton("3 TRẮNG (x4)", callback_data=f"p_xd_3t_{amt}")],
-                [InlineKeyboardButton("4 ĐỎ (x14)", callback_data=f"p_xd_4d_{amt}"), InlineKeyboardButton("4 TRẮNG (x14)", callback_data=f"p_xd_4t_{amt}")],
                 [InlineKeyboardButton("🔙 Quay lại", callback_data="menu_xocdia")]
             ]
         else:
@@ -1185,7 +1127,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
             is_win_game = check_win_by_id(2)
             if is_win_game:
-                win_sets = {"chan":[[1,1,0,0],[1,1,1,1],[0,0,0,0]], "le":[[1,0,0,0],[1,1,1,0]], "3d":[[1,1,1,0]], "3t":[[1,0,0,0]], "4d":[[1,1,1,1]], "4t":[[0,0,0,0]]}
+                win_sets = {"chan":[[1,1,0,0],[1,1,1,1],[0,0,0,0]], "le":[[1,0,0,0],[1,1,1,0]]}
                 results = random.choice(win_sets[choice])
             else:
                 all_sets = [[1,1,1,1],[0,0,0,0],[1,1,0,0],[1,1,1,0],[1,0,0,0]]
@@ -1193,10 +1135,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     r = sum(res)
                     if c=="chan": return r%2==0
                     if c=="le": return r%2!=0
-                    if c=="3d": return r==3
-                    if c=="3t": return r==1
-                    if c=="4d": return r==4
-                    if c=="4t": return r==0
                     return False
                 fail_sets = [r for r in all_sets if not check_win(r, choice)]
                 results = random.choice(fail_sets)
@@ -1209,10 +1147,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             win, rate = False, 1.95
             if choice == "chan" and is_chan: win = True
             elif choice == "le" and not is_chan: win = True
-            elif choice == "3d" and red_count == 3: win, rate = True, 4.0
-            elif choice == "3t" and red_count == 1: win, rate = True, 4.0
-            elif choice == "4d" and red_count == 4: win, rate = True, 14.0
-            elif choice == "4t" and red_count == 0: win, rate = True, 14.0
 
             if win:
                 win_amt = int(amt * rate)
@@ -1374,6 +1308,6 @@ app.add_handler(CommandHandler("xoals", xoals_user_cmd))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-print("BOT ĐÃ SẴN SÀNG VỚI CÁC LỆNH QUẢN LÝ MỚI!")
+print("BOT ĐÃ SẴN SÀNG!")
 app.run_polling()
 
