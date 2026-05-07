@@ -1,4 +1,4 @@
-
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
 import psycopg2  
 from psycopg2 import extras
@@ -1351,4 +1351,5 @@ app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG!")
-app.run_polling() 
+app.run_polling()
+  
