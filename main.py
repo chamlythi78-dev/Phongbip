@@ -73,15 +73,19 @@ CREATE TABLE IF NOT EXISTS users (
 
 query("CREATE TABLE IF NOT EXISTS game_rates (id INTEGER PRIMARY KEY, name TEXT, rate INTEGER)")
 
-# Thêm Xổ Số và Vòng Quay vào danh sách game mặc định
+# Sửa lại danh sách game chuẩn ID 1-10 (Đã đồng bộ lại thứ tự)
 default_game_names = [
     "TÀI XỈU", "XÓC ĐĨA", "ĐUA XE", "DÒ MÌN", 
     "PENALTY", "GÕ MÕ", "QUAY SỐ", "BẦU CUA", "XỔ SỐ", "VÒNG QUAY MAY MẮN"
 ]
+
 for i, name in enumerate(default_game_names, 1):
+    # Cập nhật hoặc chèn mới để đảm bảo tên game đúng ID
     res = query("SELECT 1 FROM game_rates WHERE id=%s", (i,))
     if not res:
         query("INSERT INTO game_rates VALUES(%s, %s, 10)", (i, name))
+    else:
+        query("UPDATE game_rates SET name=%s WHERE id=%s", (name, i))
 
 # Đảm bảo các cột tồn tại
 try: query("ALTER TABLE users ADD COLUMN total_bet BIGINT DEFAULT 0")
@@ -91,8 +95,6 @@ except: pass
 
 query("CREATE TABLE IF NOT EXISTS history (user_id BIGINT, amount BIGINT, note TEXT, time TEXT)")
 query("CREATE TABLE IF NOT EXISTS banned (user_id BIGINT PRIMARY KEY)")
-
-# Thêm bảng settings mở rộng cho Tên Bot
 query("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
 
 maintenance_keys = [
@@ -105,22 +107,27 @@ for k in maintenance_keys:
     if not res:
         query("INSERT INTO settings VALUES(%s, '0')", (k,))
 
-# Khởi tạo tên Bot mặc định nếu chưa có
 res_name = query("SELECT 1 FROM settings WHERE key='bot_display_name'")
 if not res_name:
     query("INSERT INTO settings VALUES('bot_display_name', 'Hệ thống Game Uy Tín')")
 
-# ===== HÀM KIỂM SOÁT TỈ LỆ MỚI =====
+# ===== HÀM KIỂM SOÁT TỈ LỆ (FIX LỖI 100% THUA) =====
 def get_rate_by_id(game_id, user_id=None):
+    # Ưu tiên tỉ lệ riêng của user nếu có
     if user_id:
         res_user = query("SELECT rate_bonus FROM users WHERE user_id=%s", (user_id,))
         if res_user and res_user[0][0] is not None:
             return res_user[0][0]
+    
+    # Nếu không có tỉ lệ riêng, lấy tỉ lệ chung của game
     res = query("SELECT rate FROM game_rates WHERE id=%s", (game_id,))
     return res[0][0] if res else 10
 
 def check_win_by_id(game_id, user_id=None):
     rate = get_rate_by_id(game_id, user_id)
+    # Nếu rate là 100, chắc chắn thắng. Nếu rate là 0, chắc chắn thua.
+    if rate >= 100: return True
+    if rate <= 0: return False
     return random.randint(1, 100) <= rate
 
 def check_mt(key):
@@ -184,7 +191,7 @@ def sub_money(uid, amt, note="withdraw"):
         query("UPDATE users SET total_bet=total_bet+%s WHERE user_id=%s", (amt, uid))
     return True
 
-# ===== CÁC COMMANDS MỚI =====
+# ===== CÁC COMMANDS ADMIN & USER =====
 
 async def give_money_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -221,7 +228,6 @@ async def set_bot_name_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query("UPDATE settings SET value=%s WHERE key='bot_display_name'", (new_name,))
     await update.message.reply_text(f"✅ Đã đổi tên hiển thị của Bot thành: **{new_name}**", parse_mode="Markdown")
 
-# ===== NEW COMMANDS CHÈN THÊM (CŨ) =====
 async def resetsdall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     query("UPDATE users SET balance = 0")
@@ -250,7 +256,6 @@ async def tile1_user_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Lỗi dữ liệu nhập vào.")
 
-# ===== ADMIN COMMANDS =====
 async def soduall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     users = query("SELECT user_id, balance FROM users WHERE balance > 0 ORDER BY balance DESC")
@@ -357,7 +362,7 @@ async def play_dice_animation(update: Update, choice_code, amount):
     
     c = choice_code.upper()
     is_chan, is_tai = (total % 2 == 0), (total >= 11)
-    is_win = check_win_by_id(1, uid)
+    is_win = check_win_by_id(1, uid) # ID 1 TÀI XỈU
     
     win = False
     if is_win:
@@ -365,6 +370,7 @@ async def play_dice_animation(update: Update, choice_code, amount):
            (c == "XXX" and not is_tai) or (c == "XXT" and is_tai):
             win = True
     else:
+        # Nếu không trúng tỉ lệ thắng, ép kết quả sang thua
         win = False 
 
     if win:
@@ -396,7 +402,7 @@ async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query("UPDATE codes SET uses=uses-1 WHERE code=%s", (code_str,))
     await update.message.reply_text(f"🎉 **NHẬN QUÀ THÀNH CÔNG!**\n\n💰 Bạn nhận được: `+{reward:,}đ`", parse_mode="Markdown")
 
-# ===== ADMIN COMMANDS (CONT) =====
+# ===== ADMIN COMMANDS =====
 async def tilewin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     try:
@@ -404,9 +410,12 @@ async def tilewin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         new_rate = int(ctx.args[1])
         if not (0 <= new_rate <= 100):
             return await update.message.reply_text("❌ Tỉ lệ thắng phải từ 0% đến 100%!")
+        
+        # Đồng bộ ID game khi update
         query("UPDATE game_rates SET rate=%s WHERE id=%s", (new_rate, game_id))
         res = query("SELECT name FROM game_rates WHERE id=%s", (game_id,))
         game_name = res[0][0] if res else "Không xác định"
+        
         await update.message.reply_text(
             f"✅ **CẬP NHẬT TỈ LỆ THÀNH CÔNG**\n\n"
             f"🎮 Game: `{game_id} - {game_name}`\n"
@@ -947,7 +956,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         elif act == "sub": sub_money(tid, int(parts[4]), "Admin trừ tiền")
         
         await q.answer("Thành công!")
-        # Quay lại quản lý user đó
         res = query("SELECT balance, refs, bank, stk, name, last_checkin, total_bet FROM users WHERE user_id=%s", (tid,))
         u = res[0]
         status_text = "🚫 ĐANG CHẶN" if is_banned(tid) else "🟢 HOẠT ĐỘNG"
@@ -1034,10 +1042,8 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         prizes = [0, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
         
         if is_win_vq:
-            # Nếu thắng, chọn ngẫu nhiên từ danh sách các giải có tiền (>0)
             prize = random.choice([p for p in prizes if p > 0])
         else:
-            # Nếu thua, chắc chắn rơi vào ô 0đ
             prize = 0
         
         msg_vq = await ctx.bot.send_message(uid, "🌀 **ĐANG QUAY...**")
@@ -1062,8 +1068,8 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif d.startswith("set_bc_"):
         amt = int(d.split("_")[2])
         kb = [
-            [InlineKeyboardButton("鹿 NAI", callback_data=f"p_bc_0_{amt}"), InlineKeyboardButton("🦀 CUA", callback_data=f"p_bc_1_{amt}"), InlineKeyboardButton("🐟 CÁ", callback_data=f"p_bc_2_{amt}")],
-            [InlineKeyboardButton("🐯 HỔ", callback_data=f"p_bc_3_{amt}"), InlineKeyboardButton("🦐 TÔM", callback_data=f"p_bc_4_{amt}"), InlineKeyboardButton("🍐 BẦU", callback_data=f"p_bc_5_{amt}")],
+            [InlineKeyboardButton("nai NAI", callback_data=f"p_bc_0_{amt}"), InlineKeyboardButton("cua CUA", callback_data=f"p_bc_1_{amt}"), InlineKeyboardButton("ca CA", callback_data=f"p_bc_2_{amt}")],
+            [InlineKeyboardButton("ho HO", callback_data=f"p_bc_3_{amt}"), InlineKeyboardButton("tom TOM", callback_data=f"p_bc_4_{amt}"), InlineKeyboardButton("bau BAU", callback_data=f"p_bc_5_{amt}")],
             [InlineKeyboardButton("🔙 Quay lại", callback_data="menu_bc")]
         ]
         await q.edit_message_text(f"🦀 **BẦU CUA**\n💰 Cược: `{amt:,}đ`\n👇 Chọn linh vật bạn đặt cược:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -1078,7 +1084,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         
         msg_bc = await ctx.bot.send_message(uid, "🎲 **ĐANG LẮC BẦU CUA...**")
         
-        is_win_bc = check_win_by_id(8, uid) 
+        is_win_bc = check_win_by_id(8, uid) # ID 8 Bầu Cua chuẩn
         if is_win_bc:
             res1 = choice_idx
             res2 = random.randint(0, 5)
@@ -1141,7 +1147,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         msg_qs = await ctx.bot.send_message(uid, "🌀 **ĐANG QUAY SỐ...**")
         await asyncio.sleep(2)
         
-        is_win_qs = check_win_by_id(7, uid) 
+        is_win_qs = check_win_by_id(7, uid) # ID 7 Quay Số
         if is_win_qs:
             result_qs = choice
         else:
@@ -1203,7 +1209,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         amt = int(d.split("_")[2])
         if not sub_money(uid, amt, "Cược Dò Mìn"): return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
         
-        is_win_game = check_win_by_id(4, uid)
+        is_win_game = check_win_by_id(4, uid) # ID 4 Dò Mìn
         grid = [0]*12 + [1]*3 
         random.shuffle(grid)
         
@@ -1294,18 +1300,17 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 try: await msg_status.edit_text(f + "\n⚡️ ĐANG LẮC...")
                 except: pass
 
-            is_win_game = check_win_by_id(2, uid)
+            is_win_game = check_win_by_id(2, uid) # ID 2 Xóc đĩa
             if is_win_game:
                 win_sets = {"chan":[[1,1,0,0],[1,1,1,1],[0,0,0,0]], "le":[[1,0,0,0],[1,1,1,0]]}
                 results = random.choice(win_sets[choice])
             else:
                 all_sets = [[1,1,1,1],[0,0,0,0],[1,1,0,0],[1,1,1,0],[1,0,0,0]]
-                def check_win(res, c):
+                def check_fail(res, c):
                     r = sum(res)
-                    if c=="chan": return r%2==0
-                    if c=="le": return r%2!=0
-                    return False
-                fail_sets = [r for r in all_sets if not check_win(r, choice)]
+                    if c=="chan": return r%2!=0
+                    return r%2==0
+                fail_sets = [r for r in all_sets if check_fail(r, choice)]
                 results = random.choice(fail_sets)
 
             random.shuffle(results)
@@ -1329,7 +1334,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         if game == "ba":
             sub_money(uid, amt, f"Cược Penalty")
-            is_win = check_win_by_id(5, uid)
+            is_win = check_win_by_id(5, uid) # ID 5 Penalty
             player_choice = int(choice)
             if is_win:
                 goalie_direction = random.choice([d for d in [1, 2, 3] if d != player_choice])
@@ -1368,7 +1373,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             results = [d1.dice.value, d2.dice.value, d3.dice.value]
             total = sum(results)
             res_type = "tai" if total >= 11 else "xiu"
-            is_win_check = check_win_by_id(1, uid)
+            is_win_check = check_win_by_id(1, uid) # ID 1 Tài Xỉu
             
             win = (choice == res_type and is_win_check)
 
@@ -1404,7 +1409,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not sub_money(uid, amt, "Cược Gõ Mõ"): 
             return await ctx.bot.send_message(uid, "❌ Số dư không đủ.")
         
-        is_win_wood = check_win_by_id(6, uid)
+        is_win_wood = check_win_by_id(6, uid) # ID 6 Gõ Mõ
         if is_win_wood:
             break_point = round(random.uniform(3.0, 10.0), 2)
         else:
@@ -1462,7 +1467,7 @@ async def handle_xs_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         msg = await update.message.reply_text(f"⏳ Đang gửi số **{num_str}** lên hệ thống xổ số...")
         await asyncio.sleep(2)
         
-        is_win_xs = check_win_by_id(9, uid)
+        is_win_xs = check_win_by_id(9, uid) # ID 9 Xổ Số chuẩn
         if is_win_xs: result_xs = num_str
         else: result_xs = str(random.randint(0, 99)).zfill(2)
         
@@ -1475,7 +1480,6 @@ async def handle_xs_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             
         await msg.edit_text(f"📊 **KẾT QUẢ XỔ SỐ**\n━━━━━━━━━━━━━━━━━━━━━\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
 
-# MessageHandler logic phân nhánh cho Xổ Số và Chat thường
 async def main_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if ctx.user_data.get(f"awaiting_xs_{uid}"):
@@ -1520,6 +1524,6 @@ app.add_handler(CommandHandler("setname", set_bot_name_cmd))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_handler))
 
-print("BOT ĐÃ SẴN SÀNG!")
+print("BOT ĐÃ SẴN SÀNG VỚI ID GAME CHUẨN!")
 app.run_polling()
  
