@@ -73,10 +73,10 @@ CREATE TABLE IF NOT EXISTS users (
 
 query("CREATE TABLE IF NOT EXISTS game_rates (id INTEGER PRIMARY KEY, name TEXT, rate INTEGER)")
 
-# Thêm Xổ Số vào danh sách game mặc định (ID 9)
+# Thêm Xổ Số và Vòng Quay vào danh sách game mặc định
 default_game_names = [
     "TÀI XỈU", "XÓC ĐĨA", "ĐUA XE", "DÒ MÌN", 
-    "PENALTY", "GÕ MÕ", "QUAY SỐ", "BẦU CUA", "XỔ SỐ"
+    "PENALTY", "GÕ MÕ", "QUAY SỐ", "BẦU CUA", "XỔ SỐ", "VÒNG QUAY MAY MẮN"
 ]
 for i, name in enumerate(default_game_names, 1):
     res = query("SELECT 1 FROM game_rates WHERE id=%s", (i,))
@@ -418,7 +418,8 @@ async def tilewin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "⚠️ **HƯỚNG DẪN CHỈNH TỈ LỆ**\n"
             "Cú pháp: `/tilewin [Số_ID] [Tỉ_lệ]`\n\n"
             "1. TÀI XỈU | 2. XÓC ĐĨA | 3. ĐUA XE | 4. DÒ MÌN\n"
-            "5. PENALTY | 6. GÕ MÕ | 7. QUAY SỐ | 8. BẦU CUA | 9. XỔ SỐ\n\n"
+            "5. PENALTY | 6. GÕ MÕ | 7. QUAY SỐ | 8. BẦU CUA\n"
+            "9. XỔ SỐ | 10. VÒNG QUAY MAY MẮN\n\n"
             "VD: `/tilewin 1 50` (Chỉnh Tài Xỉu thắng 50%)"
         )
         await update.message.reply_text(msg, parse_mode="Markdown")
@@ -1029,9 +1030,15 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not sub_money(uid, 5000, "Vòng quay may mắn"):
             return await ctx.bot.send_message(uid, "❌ Bạn không đủ 5.000đ")
         
+        is_win_vq = check_win_by_id(10, uid) # ID 10 Vòng quay
         prizes = [0, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
-        weights = [40, 25, 15, 10, 5, 3, 1, 1] 
-        prize = random.choices(prizes, weights=weights)[0]
+        
+        if is_win_vq:
+            # Nếu thắng, chọn ngẫu nhiên từ danh sách các giải có tiền (>0)
+            prize = random.choice([p for p in prizes if p > 0])
+        else:
+            # Nếu thua, chắc chắn rơi vào ô 0đ
+            prize = 0
         
         msg_vq = await ctx.bot.send_message(uid, "🌀 **ĐANG QUAY...**")
         await asyncio.sleep(2)
