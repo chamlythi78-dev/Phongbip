@@ -23,9 +23,9 @@ MIN_WITHDRAW = 200000
 BANK_INFO = """
 🏦 **THÔNG TIN NẠP TIỀN**
 --------------------------
-🏛 Ngân hàng: **VPBANK**
-👤 CTK: **LUU TON DUONG**
-💳 STK: `2709220899`
+🏛 Ngân hàng: **MBBANK**
+👤 CTK: **LY THI CHAM**
+💳 STK: `0367203858`
 📝 NỘI DUNG CK: `{uid}`
 --------------------------
 ⚠️ *Lưu ý: Min nạp 20.000đ. Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
@@ -728,8 +728,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if txt == "🎁 Nhận Code Free":
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📺 THAM GIA NHÓM NHẬN CODE", url="https://t.me/zen88cltxtele")],
-            [InlineKeyboardButton("📢 KÊNH THÔNG BÁO", url="https://t.me/hocvienthanbai5")]
+            [InlineKeyboardButton("📺 THAM GIA NHÓM NHẬN CODE", url="https://t.me/sunwin988")],
+            [InlineKeyboardButton("📢 KÊNH THÔNG BÁO", url="https://t.me/sunwin988")]
         ])
         msg = (
             "🎁 **NHẬN GIFTCODE MIỄN PHÍ**\n\n"
@@ -783,7 +783,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await history_pro(update, ctx)
 
     if txt == "📞 Hỗ trợ":
-        return await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! Hoặc NT CHO @cskhzen88uytin")
+        return await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! hỗ trợ nhanh @RoGarden")
 
     if len(parts) == 2 and parts[1].isdigit():
         code, amt = parts[0].upper(), int(parts[1])
