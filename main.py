@@ -528,7 +528,7 @@ async def reset_all_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("❌ HỦY THAO TÁC", callback_data="close_admin")]
     ])
     await update.message.reply_text(
-        "⚠️ **CẢNH BÁO NGUY HIỂM** ⚠️\n\n"
+        "⚠️ **CẢNH BẢO NGUY HIỂM** ⚠️\n\n"
         "Thao tác này sẽ xóa sạch dữ liệu các bảng: **Users, History, Codes, Banned**.\n"
         "Mọi thông tin số dư và lịch sử sẽ biến mất vĩnh viễn.\n\n"
         "Bạn có chắc chắn muốn thực hiện?", reply_markup=kb, parse_mode="Markdown")
@@ -1021,14 +1021,14 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"💿 Xóc Đĩa: {st('mt_xocdia')}", callback_data="tg_mt_xocdia")],
             [InlineKeyboardButton(f"🏎 Đua Xe: {st('mt_duaxe')}", callback_data="tg_mt_duaxe"), 
              InlineKeyboardButton(f"💣 Dò Mìn: {st('mt_domin')}", callback_data="tg_mt_domin")],
-            [InlineKeyboardButton(f"⚽ Penalty: {st('mt_penalty')}", callback_data="tg_mt_penalty")], 
-            [InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
-            [InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")],
-            [InlineKeyboardButton(f"🦀 Bầu Cua: {st('mt_baucua')}", callback_data="tg_mt_baucua")],
-            [InlineKeyboardButton(f"📉 Xổ Số: {st('mt_xoso')}", callback_data="tg_mt_xoso")],
-            [InlineKeyboardButton(f"🎡 Vòng Quay: {st('mt_vongquay')}", callback_data="tg_mt_vongquay")],
-            [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap")], 
-            [InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
+            [InlineKeyboardButton(f"⚽ Penalty: {st('mt_penalty')}", callback_data="tg_mt_penalty"), 
+             InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
+            [InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso"),
+             InlineKeyboardButton(f"🦀 Bầu Cua: {st('mt_baucua')}", callback_data="tg_mt_baucua")], 
+            [InlineKeyboardButton(f"📉 Xổ Số: {st('mt_xoso')}", callback_data="tg_mt_xoso"),
+             InlineKeyboardButton(f"🎡 Vòng Quay: {st('mt_vongquay')}", callback_data="tg_mt_vongquay")],
+            [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap"), 
+             InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
             [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
         ]
         await q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(new_kb))
@@ -1568,8 +1568,8 @@ app.add_handler(CommandHandler("give", give_money_cmd))
 app.add_handler(CommandHandler("top", top_cmd))
 app.add_handler(CommandHandler("setname", set_bot_name_cmd))
 
-# ĐĂNG KÝ COMMAND MỚI: DASHBOARD
-app.add_handler(CommandHandler("dashboard", dashboard_cmd))
+# ĐĂNG KÝ COMMAND MỚI: THONGKE (Thay thế dashboard)
+app.add_handler(CommandHandler("thongke", dashboard_cmd))
 
 # ĐĂNG KÝ JOB CHẠY TỰ ĐỘNG BẢO HIỂM VIP LÚC 00:00:01 HÀNG NGÀY
 if app.job_queue:
