@@ -1567,7 +1567,7 @@ app.add_handler(CommandHandler("xoals", xoals_user_cmd))
 app.add_handler(CommandHandler("give", give_money_cmd))
 app.add_handler(CommandHandler("top", top_cmd))
 app.add_handler(CommandHandler("setname", set_bot_name_cmd))
-application.add_handler(CommandHandler("thongke", thongke_function_name))
+app.add_handler(CommandHandler("thongke", thongke_function_name))
 
 
 # ĐĂNG KÝ COMMAND MỚI: THONGKE (Thay thế dashboard)
