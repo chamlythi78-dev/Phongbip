@@ -613,7 +613,7 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     res = query("SELECT COUNT(*) FROM users")
     total = res[0][0] if res else 0
-    await update.message.reply_text(f"📊 **THỐNG KÊ:**\n\n👥 Tổng số người dùng: `{total}`", parse_mode="Markdown")
+    await update.message.reply_text(f"📊 **THÔNG KÊ:**\n\n👥 Tổng số người dùng: `{total}`", parse_mode="Markdown")
 
 async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
     if update.effective_user.id not in ADMIN_IDS: return
