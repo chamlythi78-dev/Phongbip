@@ -18,6 +18,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 ADMIN_IDS = [8619503816] # Đã lọc ID trùng
 BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 200000 
+LOG_GROUP_ID = -1003663678808 # ID Nhóm thông báo mới
 
 # THÔNG TIN NẠP TIỀN
 BANK_INFO = """
@@ -156,6 +157,45 @@ def get_next_multiplier(current_mult):
         return round(current_mult + 0.10, 2)
     else:
         return round(current_mult + 0.20, 2)
+
+# ===== TÍNH NĂNG MỚI: DASHBOARD & BẢO HIỂM VIP =====
+
+async def dashboard_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    today = datetime.now().strftime("%d/%m/%Y")
+    this_month = datetime.now().strftime("/%m/%Y")
+    
+    nap_today = query("SELECT SUM(amount) FROM history WHERE amount > 0 AND note ILIKE '%nạp%' AND time LIKE %s", (f"%{today}%",))[0][0] or 0
+    rut_today = query("SELECT SUM(amount) FROM history WHERE amount < 0 AND note ILIKE '%Rút%' AND time LIKE %s", (f"%{today}%",))[0][0] or 0
+    
+    nap_month = query("SELECT SUM(amount) FROM history WHERE amount > 0 AND note ILIKE '%nạp%' AND time LIKE %s", (f"%{this_month}%",))[0][0] or 0
+    rut_month = query("SELECT SUM(amount) FROM history WHERE amount < 0 AND note ILIKE '%Rút%' AND time LIKE %s", (f"%{this_month}%",))[0][0] or 0
+    
+    total_cuoc = query("SELECT SUM(amount) FROM history WHERE amount < 0 AND note NOT ILIKE '%Rút%' AND note NOT ILIKE '%trừ tiền%'")[0][0] or 0
+    total_thang = query("SELECT SUM(amount) FROM history WHERE amount > 0 AND note NOT ILIKE '%nạp%' AND note NOT ILIKE '%Code%' AND note NOT ILIKE '%Checkin%'")[0][0] or 0
+    loi_nhuan = abs(total_cuoc) - total_thang
+    
+    msg = (f"📊 **BẢNG THỐNG KÊ DOANH THU**\n━━━━━━━━━━━━━━━━━━━━━\n"
+           f"📅 **Hôm nay ({today}):**\n  📥 Tổng nạp: `+{nap_today:,}đ`\n  📤 Tổng rút: `{rut_today:,}đ`\n\n"
+           f"📅 **Tháng này ({datetime.now().month}):**\n  📥 Tổng nạp: `+{nap_month:,}đ`\n  📤 Tổng rút: `{rut_month:,}đ`\n\n"
+           f"📈 **Tổng kết Game (All time):**\n  💰 Lợi nhuận ròng: `{loi_nhuan:,}đ`\n━━━━━━━━━━━━━━━━━━━━━")
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+async def bao_hiem_vip(context: ContextTypes.DEFAULT_TYPE):
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
+    users = query("SELECT user_id, SUM(amount) FROM history WHERE time LIKE %s GROUP BY user_id", (f"%{yesterday}%",))
+    for u_id, total in users:
+        if total < -1000000:
+            res = query("SELECT total_bet FROM users WHERE user_id=%s", (u_id,))
+            total_bet = res[0][0] if res else 0
+            vip_name, _ = get_vip_info(total_bet)
+            if "VIP" in vip_name:
+                percent = 2 if "VIP 1" in vip_name else 5
+                hoan_tien = int(abs(total) * (percent / 100))
+                add_money(u_id, hoan_tien, f"Bảo hiểm VIP {yesterday}")
+                try:
+                    await context.bot.send_message(u_id, f"🛡 **BẢO HIỂM VIP**\n\nHôm qua bạn đã chưa may mắn. Hệ thống hoàn lại `{percent}%` tiền thua cược: `+{hoan_tien:,}đ`.")
+                except: pass
 
 # ===== USER UTILS =====
 def get_user(uid):
@@ -460,6 +500,10 @@ async def nap_tien_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         target_id = int(ctx.args[0])
         amount = int(ctx.args[1])
         add_money(target_id, amount, f"Admin nạp tiền")
+        
+        # TÍNH NĂNG MỚI: Thông báo vào nhóm LOG
+        await ctx.bot.send_message(chat_id=LOG_GROUP_ID, text=f"✅ **THÔNG BÁO NẠP TIỀN**\n👤 ID: `{target_id}`\n💰 Số tiền: `+{amount:,}đ`\n────────────────\nChúc bạn chơi game vui vẻ!")
+
         await update.message.reply_text(f"✅ **NẠP TIỀN THÀNH CÔNG**\n\n👤 ID: `{target_id}`\n💰 Số tiền: `+{amount:,}đ`", parse_mode="Markdown")
         bill = (
             f"💳 **BIẾN ĐỘNG SỐ DƯ**\n"
@@ -1003,6 +1047,9 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         act, u_id, amt = d.split("_")
         u_id, amt = int(u_id), int(amt)
         if act == "ok":
+            # TÍNH NĂNG MỚI: Thông báo vào nhóm LOG khi Rút được duyệt
+            await ctx.bot.send_message(chat_id=LOG_GROUP_ID, text=f"📤 **THÔNG BÁO RÚT TIỀN**\n👤 ID: `{u_id}`\n💰 Số tiền: `{amt:,}đ`\n────────────────\n✅ Giao dịch đã được duyệt thành công!")
+
             await ctx.bot.send_message(u_id, f"✅ Yêu cầu rút `{amt:,}đ` đã được duyệt!")
             await q.edit_message_text(f"✅ ĐÃ DUYỆT ID {u_id}")
         else:
@@ -1521,9 +1568,16 @@ app.add_handler(CommandHandler("give", give_money_cmd))
 app.add_handler(CommandHandler("top", top_cmd))
 app.add_handler(CommandHandler("setname", set_bot_name_cmd))
 
+# ĐĂNG KÝ COMMAND MỚI: DASHBOARD
+app.add_handler(CommandHandler("dashboard", dashboard_cmd))
+
+# ĐĂNG KÝ JOB CHẠY TỰ ĐỘNG BẢO HIỂM VIP LÚC 00:00:01 HÀNG NGÀY
+if app.job_queue:
+    app.job_queue.run_daily(bao_hiem_vip, time=datetime.strptime("00:00:01", "%H:%M:%S").time())
+
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_handler))
 
-print("BOT ĐÃ SẴN SÀNG VỚI ID GAME CHUẨN!")
+print("BOT ĐÃ SẴN SÀNG VỚI ID GAME CHUẨN VÀ TÍNH NĂNG MỚI!")
 app.run_polling()
  
