@@ -1352,4 +1352,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("BOT ĐÃ SẴN SÀNG!")
 app.run_polling()
-  
+ 
