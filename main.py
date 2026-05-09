@@ -68,9 +68,10 @@ CREATE TABLE IF NOT EXISTS users (
 
 query("CREATE TABLE IF NOT EXISTS game_rates (id INTEGER PRIMARY KEY, name TEXT, rate INTEGER)")
 
+# Thêm Xổ Số vào danh sách game mặc định (ID 9)
 default_game_names = [
     "TÀI XỈU", "XÓC ĐĨA", "ĐUA XE", "DÒ MÌN", 
-    "PENALTY", "GÕ MÕ", "QUAY SỐ", "BẦU CUA"
+    "PENALTY", "GÕ MÕ", "QUAY SỐ", "BẦU CUA", "XỔ SỐ"
 ]
 for i, name in enumerate(default_game_names, 1):
     res = query("SELECT 1 FROM game_rates WHERE id=%s", (i,))
@@ -88,26 +89,30 @@ except: pass
 query("CREATE TABLE IF NOT EXISTS history (user_id BIGINT, amount BIGINT, note TEXT, time TEXT)")
 query("CREATE TABLE IF NOT EXISTS banned (user_id BIGINT PRIMARY KEY)")
 
-query("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value INTEGER)")
+# Thêm bảng settings mở rộng cho Tên Bot
+query("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+
 maintenance_keys = [
     'mt_taixiu', 'mt_duaxe', 'mt_domin', 
     'mt_penalty', 'mt_gomo', 'mt_nap', 'mt_rut', 
-    'mt_xocdia', 'mt_quayso', 'mt_baucua'
+    'mt_xocdia', 'mt_quayso', 'mt_baucua', 'mt_xoso', 'mt_vongquay'
 ]
 for k in maintenance_keys:
     res = query("SELECT 1 FROM settings WHERE key=%s", (k,))
     if not res:
-        query("INSERT INTO settings VALUES(%s, 0)", (k,))
+        query("INSERT INTO settings VALUES(%s, '0')", (k,))
+
+# Khởi tạo tên Bot mặc định nếu chưa có
+res_name = query("SELECT 1 FROM settings WHERE key='bot_display_name'")
+if not res_name:
+    query("INSERT INTO settings VALUES('bot_display_name', 'Hệ thống Game Uy Tín')")
 
 # ===== HÀM KIỂM SOÁT TỈ LỆ MỚI =====
 def get_rate_by_id(game_id, user_id=None):
-    # Ưu tiên lấy tỉ lệ riêng của người dùng nếu có
     if user_id:
         res_user = query("SELECT rate_bonus FROM users WHERE user_id=%s", (user_id,))
         if res_user and res_user[0][0] is not None:
             return res_user[0][0]
-            
-    # Nếu không có tỉ lệ riêng, lấy tỉ lệ chung của game
     res = query("SELECT rate FROM game_rates WHERE id=%s", (game_id,))
     return res[0][0] if res else 10
 
@@ -117,7 +122,20 @@ def check_win_by_id(game_id, user_id=None):
 
 def check_mt(key):
     res = query("SELECT value FROM settings WHERE key=%s", (key,))
-    return res[0][0] == 1 if res else False
+    return res[0][0] == '1' if res else False
+
+def get_bot_name():
+    res = query("SELECT value FROM settings WHERE key='bot_display_name'")
+    return res[0][0] if res else "Hệ thống Game Uy Tín"
+
+# Tính toán cấp độ VIP
+def get_vip_info(total_bet):
+    if total_bet >= 50000000: return "VIP 5 (Kim Cương)", 5000
+    if total_bet >= 20000000: return "VIP 4 (Vàng)", 3000
+    if total_bet >= 10000000: return "VIP 3 (Bạc)", 1500
+    if total_bet >= 5000000: return "VIP 2 (Đồng)", 800
+    if total_bet >= 1000000: return "VIP 1", 500
+    return "Thành viên", 300
 
 def get_next_multiplier(current_mult):
     if current_mult < 1.05:
@@ -159,11 +177,48 @@ def sub_money(uid, amt, note="withdraw"):
     query("UPDATE users SET balance=balance-%s WHERE user_id=%s", (amt, uid))
     query("INSERT INTO history VALUES(%s,%s,%s,%s)", (uid, -amt, note, now_str))
     
-    if note != "Rút tiền" and note != "withdraw" and "Admin" not in note:
+    if note != "Rút tiền" and note != "withdraw" and "Admin" not in note and "Chuyển tiền" not in note:
         query("UPDATE users SET total_bet=total_bet+%s WHERE user_id=%s", (amt, uid))
     return True
 
-# ===== NEW COMMANDS CHÈN THÊM =====
+# ===== CÁC COMMANDS MỚI =====
+
+async def give_money_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if is_banned(uid): return
+    if len(ctx.args) < 2:
+        return await update.message.reply_text("❌ Cú pháp: `/give [ID_Người_Nhận] [Số_Tiền]`")
+    try:
+        target_id = int(ctx.args[0])
+        amount = int(ctx.args[1])
+        if amount < 10000: return await update.message.reply_text("❌ Số tiền chuyển tối thiểu là 10.000đ")
+        
+        if sub_money(uid, amount, f"Chuyển tiền tới {target_id}"):
+            add_money(target_id, amount, f"Nhận tiền từ {uid}")
+            await update.message.reply_text(f"✅ Đã chuyển thành công `{amount:,}đ` tới ID `{target_id}`")
+            try: await ctx.bot.send_message(target_id, f"🔔 Bạn nhận được `{amount:,}đ` từ ID `{uid}`")
+            except: pass
+        else:
+            await update.message.reply_text("❌ Số dư của bạn không đủ.")
+    except:
+        await update.message.reply_text("❌ Lỗi định dạng dữ liệu.")
+
+async def top_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    users = query("SELECT user_id, balance FROM users ORDER BY balance DESC LIMIT 10")
+    text = "🏆 **TOP 10 ĐẠI GIA GIÀU NHẤT**\n━━━━━━━━━━━━━━━━━━━━━\n"
+    for i, u in enumerate(users, 1):
+        medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"{i}."
+        text += f"{medal} ID: `{u[0]}` — `{u[1]:,}đ`\n"
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+async def set_bot_name_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    if not ctx.args: return await update.message.reply_text("❌ Cú pháp: `/setname [Tên mới]`")
+    new_name = " ".join(ctx.args)
+    query("UPDATE settings SET value=%s WHERE key='bot_display_name'", (new_name,))
+    await update.message.reply_text(f"✅ Đã đổi tên hiển thị của Bot thành: **{new_name}**", parse_mode="Markdown")
+
+# ===== NEW COMMANDS CHÈN THÊM (CŨ) =====
 async def resetsdall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     query("UPDATE users SET balance = 0")
@@ -359,8 +414,8 @@ async def tilewin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         msg = (
             "⚠️ **HƯỚNG DẪN CHỈNH TỈ LỆ**\n"
             "Cú pháp: `/tilewin [Số_ID] [Tỉ_lệ]`\n\n"
-            "1. TÀI XỈU\n2. XÓC ĐĨA\n3. ĐUA XE\n4. DÒ MÌN\n"
-            "5. PENALTY\n6. GÕ MÕ\n7. QUAY SỐ\n8. BẦU CUA\n\n"
+            "1. TÀI XỈU | 2. XÓC ĐĨA | 3. ĐUA XE | 4. DÒ MÌN\n"
+            "5. PENALTY | 6. GÕ MÕ | 7. QUAY SỐ | 8. BẦU CUA | 9. XỔ SỐ\n\n"
             "VD: `/tilewin 1 50` (Chỉnh Tài Xỉu thắng 50%)"
         )
         await update.message.reply_text(msg, parse_mode="Markdown")
@@ -377,6 +432,8 @@ async def baotri_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
         [InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso"),
          InlineKeyboardButton(f"🦀 Bầu Cua: {st('mt_baucua')}", callback_data="tg_mt_baucua")], 
+        [InlineKeyboardButton(f"📉 Xổ Số: {st('mt_xoso')}", callback_data="tg_mt_xoso"),
+         InlineKeyboardButton(f"🎡 Vòng Quay: {st('mt_vongquay')}", callback_data="tg_mt_vongquay")],
         [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap"), 
          InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
         [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
@@ -614,11 +671,13 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ["🎮 Danh sách game", "👤 Tài khoản"],
         ["💳 Nạp tiền", "🛒 Rút tiền"],
         ["🎁 Checkin", "🎁 Nhận Code Free"],
-        ["📜 Lịch sử", "📞 Hỗ trợ"]
+        ["📜 Lịch sử", "🏆 Top Đại Gia"],
+        ["📞 Hỗ trợ"]
     ], resize_keyboard=True)
 
     welcome_text = (
         f"👋 **CHÀO MỪNG {update.effective_user.first_name.upper()} ĐÃ THAM GIA!**\n\n"
+        f"🛡 **{get_bot_name()}**\n"
         f"Hệ thống trò chơi minh bạch — uy tín hàng đầu.\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 **MIN RÚT TIỀN:** `{MIN_WITHDRAW:,}đ`\n" 
@@ -706,6 +765,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             u = res[0]
         
+        vip_name, _ = get_vip_info(u[5])
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("📥 Lịch sử Nạp", callback_data="his_deposit"),
              InlineKeyboardButton("📤 Lịch sử Rút", callback_data="his_withdraw")]
@@ -715,6 +775,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"👤 **THÔNG TIN TÀI KHOẢN**\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 ID: `{uid}`\n"
+            f"🌟 **Cấp VIP:** `{vip_name}`\n"
             f"💰 Số dư: `{u[0]:,}đ`\n"
             f"📊 **Tổng cược:** `{u[5]:,}đ`\n"
             f"👥 Đã mời: `{u[4]}` người\n"
@@ -725,6 +786,9 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"💡 *Sử dụng lệnh /lienket để cập nhật thông tin rút tiền!*"
         )
         return await user_reply.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
+
+    if txt == "🏆 Top Đại Gia":
+        return await top_cmd(update, ctx)
 
     if txt == "🎁 Nhận Code Free":
         kb = InlineKeyboardMarkup([
@@ -754,7 +818,9 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
              InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
             [InlineKeyboardButton("🔢 QUAY SỐ (1-3)", callback_data="menu_qs"),
-             InlineKeyboardButton("🦀 BẦU CUA TÔM CÁ", callback_data="menu_bc")]
+             InlineKeyboardButton("🦀 BẦU CUA TÔM CÁ", callback_data="menu_bc")],
+            [InlineKeyboardButton("📉 XỔ SỐ MIỀN BẮC", callback_data="menu_xoso"),
+             InlineKeyboardButton("🎡 VÒNG QUAY MAY MẮN", callback_data="menu_vq")]
         ])
         return await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
 
@@ -771,13 +837,15 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if txt == "🎁 Checkin":
         today = datetime.now().strftime("%d/%m/%Y")
-        res = query("SELECT last_checkin FROM users WHERE user_id=%s", (uid,))
+        res = query("SELECT last_checkin, total_bet FROM users WHERE user_id=%s", (uid,))
         if res and res[0][0] == today:
             await user_reply.reply_text("❌ Hôm nay bạn đã điểm danh rồi!")
             return
-        add_money(uid, 300, "Daily Checkin") 
+        
+        _, bonus = get_vip_info(res[0][1] if res else 0)
+        add_money(uid, bonus, "Daily Checkin") 
         query("UPDATE users SET last_checkin=%s WHERE user_id=%s", (today, uid))
-        return await user_reply.reply_text("🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+300đ`", parse_mode="Markdown")
+        return await user_reply.reply_text(f"🎉 **CHECKIN THÀNH CÔNG!**\n\nBạn nhận được: `+{bonus:,}đ` (Theo cấp VIP)", parse_mode="Markdown")
 
     if txt == "📜 Lịch sử":
         return await history_pro(update, ctx)
@@ -881,7 +949,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if d.startswith("tg_mt_"):
         if uid not in ADMIN_IDS: return
         key = d.replace("tg_", "")
-        new_val = 0 if check_mt(key) else 1
+        new_val = "0" if check_mt(key) else "1"
         query("UPDATE settings SET value=%s WHERE key=%s", (new_val, key))
         def st(k): return "🔴 OFF" if check_mt(k) else "🟢 ON"
         new_kb = [
@@ -893,6 +961,8 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"🪵 Gõ Mõ: {st('mt_gomo')}", callback_data="tg_mt_gomo")],
             [InlineKeyboardButton(f"🔢 Quay Số: {st('mt_quayso')}", callback_data="tg_mt_quayso")],
             [InlineKeyboardButton(f"🦀 Bầu Cua: {st('mt_baucua')}", callback_data="tg_mt_baucua")],
+            [InlineKeyboardButton(f"📉 Xổ Số: {st('mt_xoso')}", callback_data="tg_mt_xoso")],
+            [InlineKeyboardButton(f"🎡 Vòng Quay: {st('mt_vongquay')}", callback_data="tg_mt_vongquay")],
             [InlineKeyboardButton(f"💳 Nạp Tiền: {st('mt_nap')}", callback_data="tg_mt_nap")], 
             [InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
             [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
@@ -920,7 +990,49 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ctx.bot.send_message(u_id, "❌ Yêu cầu rút tiền bị từ chối. Tiền đã được hoàn lại.")
             await q.edit_message_text(f"❌ TỪ CHỐI ID {u_id}")
 
-    # ===== GAME BẦU CUA =====
+    # ===== GAME XỔ SỐ =====
+    elif d == "menu_xoso":
+        if check_mt('mt_xoso') and uid not in ADMIN_IDS:
+            return await ctx.bot.send_message(uid, "⚙️ Game Xổ Số đang bảo trì!")
+        kb = []
+        row = []
+        for i, a in enumerate(amounts):
+            row.append(InlineKeyboardButton(f"{a//1000}k" if a < 1000000 else "1M", callback_data=f"set_xs_{a}"))
+            if (i + 1) % 4 == 0: kb.append(row); row = []
+        await q.edit_message_text("📉 **XỔ SỐ MIỀN BẮC (X80)**\nChọn mức cược của bạn:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d.startswith("set_xs_"):
+        amt = int(d.split("_")[2])
+        ctx.user_data[f"xs_{uid}"] = amt
+        await q.edit_message_text(f"🔢 **XỔ SỐ**\n💰 Cược: `{amt:,}đ`\n👇 Nhập con số bạn muốn đánh (00-99):", parse_mode="Markdown")
+        ctx.user_data[f"awaiting_xs_{uid}"] = True
+
+    # Xử lý nhập số cho Xổ Số
+    elif d == "menu_vq":
+        if check_mt('mt_vongquay') and uid not in ADMIN_IDS:
+            return await ctx.bot.send_message(uid, "⚙️ Game Vòng Quay đang bảo trì!")
+        kb = [[InlineKeyboardButton("🎡 QUAY NGAY (5.000đ)", callback_data="spin_vq")],
+              [InlineKeyboardButton("🔙 Quay lại", callback_data="menu_game")]]
+        await q.edit_message_text("🎡 **VÒNG QUAY MAY MẮN**\n\nMỗi lượt quay tốn **5.000đ**. Cơ hội nhận lên đến 100k!", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif d == "spin_vq":
+        if not sub_money(uid, 5000, "Vòng quay may mắn"):
+            return await ctx.bot.send_message(uid, "❌ Bạn không đủ 5.000đ")
+        
+        prizes = [0, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
+        weights = [40, 25, 15, 10, 5, 3, 1, 1] # Tỷ lệ %
+        prize = random.choices(prizes, weights=weights)[0]
+        
+        msg_vq = await ctx.bot.send_message(uid, "🌀 **ĐANG QUAY...**")
+        await asyncio.sleep(2)
+        
+        if prize > 0:
+            add_money(uid, prize, "Thắng Vòng Quay")
+            await msg_vq.edit_text(f"🎁 **CHÚC MỪNG!**\nBạn đã quay vào ô: `+{prize:,}đ`\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
+        else:
+            await msg_vq.edit_text("💀 **MẤT LƯỢT!**\nChúc bạn may mắn lần sau.", parse_mode="Markdown")
+
+    # ===== CÁC GAME CŨ =====
     elif d == "menu_bc":
         if check_mt('mt_baucua') and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, "⚙️ Game Bầu Cua đang bảo trì!")
@@ -1316,6 +1428,36 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(f"🎉 **CHÚC MỪNG!**\n\nBạn đã dừng ở **x{game['mult']:.2f}**\n💰 Nhận được: `+{win_amt:,}đ`", parse_mode="Markdown")
             del ctx.user_data[game_id]
 
+# Xử lý tin nhắn riêng cho Xổ Số
+async def handle_xs_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if f"awaiting_xs_{uid}" in ctx.user_data:
+        num_str = update.message.text
+        if not num_str.isdigit() or len(num_str) != 2:
+            return await update.message.reply_text("❌ Vui lòng nhập đúng 2 chữ số (00-99).")
+        
+        amt = ctx.user_data.get(f"xs_{uid}", 0)
+        del ctx.user_data[f"awaiting_xs_{uid}"]
+        
+        if not sub_money(uid, amt, f"Đánh đề số {num_str}"):
+            return await update.message.reply_text("❌ Số dư không đủ.")
+        
+        msg = await update.message.reply_text(f"⏳ Đang gửi số **{num_str}** lên hệ thống xổ số...")
+        await asyncio.sleep(2)
+        
+        is_win_xs = check_win_by_id(9, uid)
+        if is_win_xs: result_xs = num_str
+        else: result_xs = str(random.randint(0, 99)).zfill(2)
+        
+        if num_str == result_xs:
+            win_amt = amt * 80
+            add_money(uid, win_amt, f"Trúng đề số {num_str}")
+            status = f"🎉 **TRÚNG ĐỀ RỒI!**\n💎 Giải đặc biệt ra số: **{result_xs}**\n💰 Nhận x80: `+{win_amt:,}đ`"
+        else:
+            status = f"💀 **TRƯỢT LÔ!**\n❌ Kết quả ra số: **{result_xs}**\n👉 Bạn đánh số: **{num_str}**"
+            
+        await msg.edit_text(f"📊 **KẾT QUẢ XỔ SỐ**\n━━━━━━━━━━━━━━━━━━━━━\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
+
 # ===== KHỞI CHẠY BOT =====
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
@@ -1341,14 +1483,28 @@ app.add_handler(CommandHandler("check", check_user_history))
 app.add_handler(CommandHandler("info", admin_info)) 
 app.add_handler(CommandHandler("nap", nap_tien_admin))
 app.add_handler(CommandHandler("soduall", soduall_cmd))
-app.add_handler(CommandHandler("tileall", tileall_set_cmd)) # Sử dụng hàm set tỉ lệ mới
-app.add_handler(CommandHandler("resetsdall", resetsdall_cmd)) # Lệnh xóa số dư
-app.add_handler(CommandHandler("tile1", tile1_user_cmd)) # Tỉ lệ riêng cho 1 user
+app.add_handler(CommandHandler("tileall", tileall_set_cmd))
+app.add_handler(CommandHandler("resetsdall", resetsdall_cmd))
+app.add_handler(CommandHandler("tile1", tile1_user_cmd))
 app.add_handler(CommandHandler("xoalsall", xoalsall_cmd))
 app.add_handler(CommandHandler("xoals", xoals_user_cmd))
 
+# Register New Commands
+app.add_handler(CommandHandler("give", give_money_cmd))
+app.add_handler(CommandHandler("top", top_cmd))
+app.add_handler(CommandHandler("setname", set_bot_name_cmd))
+
 app.add_handler(CallbackQueryHandler(handle_callback))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
+
+# MessageHandler logic phân nhánh cho Xổ Số và Chat thường
+async def main_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if f"awaiting_xs_{uid}" in ctx.user_data:
+        await handle_xs_input(update, ctx)
+    else:
+        await handle(update, ctx)
+
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_handler))
 
 print("BOT ĐÃ SẴN SÀNG!")
 app.run_polling()
