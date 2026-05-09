@@ -25,7 +25,7 @@ BANK_INFO = """
 --------------------------
 🏛 Ngân hàng: **MBBANK**
 👤 CTK: **LY THI CHAM**
-💳 STK: `0367203858`
+💳 STK: `0003456712345 `
 📝 NỘI DUNG CK: `{uid}`
 --------------------------
 ⚠️ *Lưu ý: Min nạp 20.000đ. Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
