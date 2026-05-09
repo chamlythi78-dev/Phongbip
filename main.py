@@ -74,6 +74,10 @@ CREATE TABLE IF NOT EXISTS users (
 
 query("CREATE TABLE IF NOT EXISTS game_rates (id INTEGER PRIMARY KEY, name TEXT, rate INTEGER)")
 
+# --- TÍNH NĂNG MỚI: BẢNG CẤM ---
+query("CREATE TABLE IF NOT EXISTS banned_games (user_id BIGINT, game_id INTEGER, PRIMARY KEY (user_id, game_id))")
+query("CREATE TABLE IF NOT EXISTS banned_features (user_id BIGINT, feature TEXT, PRIMARY KEY (user_id, feature))")
+
 # Sửa lại danh sách game chuẩn ID 1-10 (Đã đồng bộ lại thứ tự)
 default_game_names = [
     "TÀI XỈU", "XÓC ĐĨA", "ĐUA XE", "DÒ MÌN", 
@@ -138,6 +142,15 @@ def check_mt(key):
 def get_bot_name():
     res = query("SELECT value FROM settings WHERE key='bot_display_name'")
     return res[0][0] if res else "Hệ thống Game Uy Tín"
+
+# --- TÍNH NĂNG MỚI: KIỂM TRA CẤM ---
+def is_game_banned(uid, gid):
+    res = query("SELECT 1 FROM banned_games WHERE user_id=%s AND game_id=%s", (uid, gid))
+    return len(res) > 0 if res else False
+
+def is_feature_banned(uid, feature):
+    res = query("SELECT 1 FROM banned_features WHERE user_id=%s AND feature=%s", (uid, feature))
+    return len(res) > 0 if res else False
 
 # Tính toán cấp độ VIP
 def get_vip_info(total_bet):
@@ -232,6 +245,46 @@ def sub_money(uid, amt, note="withdraw"):
     return True
 
 # ===== CÁC COMMANDS ADMIN & USER =====
+
+# --- TÍNH NĂNG MỚI: LỆNH TỔNG QUAN ---
+async def tong_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    t_nap = query("SELECT SUM(amount) FROM history WHERE amount > 0 AND note ILIKE '%nạp%'")[0][0] or 0
+    t_rut = query("SELECT SUM(amount) FROM history WHERE amount < 0 AND note ILIKE '%Rút%'")[0][0] or 0
+    t_cuoc = query("SELECT SUM(amount) FROM history WHERE amount < 0 AND note NOT ILIKE '%Rút%' AND note NOT ILIKE '%trừ tiền%'")[0][0] or 0
+    t_thang = query("SELECT SUM(amount) FROM history WHERE amount > 0 AND note NOT ILIKE '%nạp%' AND note NOT ILIKE '%Code%' AND note NOT ILIKE '%Checkin%'")[0][0] or 0
+    loi_nhuan = abs(t_cuoc) - t_thang
+
+    msg = (f"📈 **TỔNG QUAN TÀI CHÍNH HỆ THỐNG**\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"📥 **Tổng Nạp:** `+{t_nap:,}đ`\n"
+           f"📤 **Tổng Rút:** `{t_rut:,}đ`\n"
+           f"💰 **Lợi Nhuận Thực Tế (Game):** `{loi_nhuan:,}đ`\n"
+           f"━━━━━━━━━━━━━━━━━━━━━")
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+# --- TÍNH NĂNG MỚI: LỆNH CAM/BOCAM ---
+async def cam_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    if len(ctx.args) < 2: return await update.message.reply_text("❌ Cú pháp: `/cam [id] [game_id/nap/rut]`")
+    uid, target = int(ctx.args[0]), ctx.args[1]
+    if target.isdigit():
+        query("INSERT INTO banned_games VALUES(%s, %s) ON CONFLICT DO NOTHING", (uid, int(target)))
+        await update.message.reply_text(f"🚫 Đã cấm ID `{uid}` chơi game ID `{target}`")
+    elif target in ['nap', 'rut']:
+        query("INSERT INTO banned_features VALUES(%s, %s) ON CONFLICT DO NOTHING", (uid, target))
+        await update.message.reply_text(f"🚫 Đã cấm ID `{uid}` sử dụng tính năng `{target}`")
+
+async def bocam_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    if len(ctx.args) < 2: return await update.message.reply_text("❌ Cú pháp: `/bocam [id] [game_id/nap/rut]`")
+    uid, target = int(ctx.args[0]), ctx.args[1]
+    if target.isdigit():
+        query("DELETE FROM banned_games WHERE user_id=%s AND game_id=%s", (uid, int(target)))
+        await update.message.reply_text(f"✅ Đã gỡ cấm game ID `{target}` cho ID `{uid}`")
+    elif target in ['nap', 'rut']:
+        query("DELETE FROM banned_features WHERE user_id=%s AND feature=%s", (uid, target))
+        await update.message.reply_text(f"✅ Đã gỡ cấm tính năng `{target}` cho ID `{uid}`")
 
 async def give_money_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -339,6 +392,10 @@ async def xoals_user_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ===== LOGIC GAMES ANIMATION =====
 async def play_car_race(update: Update, ctx: ContextTypes.DEFAULT_TYPE, choice, amt):
     uid = update.effective_user.id
+    # CHÈN KIỂM TRA CẤM GAME (ID 3)
+    if is_game_banned(uid, 3):
+        return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
+
     track_length = 12
     pos_a, pos_b = 0, 0
     finish_line = "🏁"
@@ -386,6 +443,10 @@ async def play_car_race(update: Update, ctx: ContextTypes.DEFAULT_TYPE, choice, 
 
 async def play_dice_animation(update: Update, choice_code, amount):
     uid = update.effective_user.id
+    # CHÈN KIỂM TRA CẤM GAME (ID 1)
+    if is_game_banned(uid, 1):
+        return await update.message.reply_text("❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
+
     if not sub_money(uid, amount, f"Cược {choice_code}"):
         return await update.message.reply_text("❌ Bạn không đủ số dư.")
 
@@ -765,6 +826,10 @@ async def lien_ket(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
+    # CHÈN KIỂM TRA CẤM RÚT
+    if is_feature_banned(uid, 'rut'):
+        return await update.message.reply_text("❌ Tính năng RÚT TIỀN của bạn đã bị khóa. Vui lòng liên hệ Admin!")
+
     if check_mt('mt_rut') and uid not in ADMIN_IDS:
         return await update.message.reply_text("⚙️ Hệ thống Rút Tiền đang bảo trì, vui lòng quay lại sau!")
         
@@ -863,6 +928,10 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True)
 
     if txt == "💳 Nạp tiền":
+        # CHÈN KIỂM TRA CẤM NẠP
+        if is_feature_banned(uid, 'nap'):
+            return await user_reply.reply_text("❌ Tính năng NẠP TIỀN của bạn đã bị khóa. Vui lòng liên hệ Admin!")
+
         if check_mt('mt_nap') and uid not in ADMIN_IDS:
             return await user_reply.reply_text("⚙️ Hệ thống Nạp Tiền đang bảo trì!")
         return await user_reply.reply_text(BANK_INFO.format(uid=uid), parse_mode="Markdown")
@@ -882,6 +951,10 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
 
     if txt == "🛒 Rút tiền":
+        # CHÈN KIỂM TRA CẤM RÚT
+        if is_feature_banned(uid, 'rut'):
+            return await user_reply.reply_text("❌ Tính năng RÚT TIỀN của bạn đã bị khóa. Vui lòng liên hệ Admin!")
+
         if check_mt('mt_rut') and uid not in ADMIN_IDS:
             return await user_reply.reply_text("⚙️ Hệ thống Rút Tiền đang bảo trì!")
         res = query("SELECT bank, stk, name FROM users WHERE user_id=%s", (uid,))
@@ -1059,6 +1132,10 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     # ===== GAME XỔ SỐ =====
     elif d == "menu_xoso":
+        # KIỂM TRA CẤM GAME (ID 9)
+        if is_game_banned(uid, 9):
+            return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
+
         if check_mt('mt_xoso') and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, "⚙️ Game Xổ Số đang bảo trì!")
         kb = []
@@ -1075,6 +1152,10 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ctx.user_data[f"awaiting_xs_{uid}"] = True
 
     elif d == "menu_vq":
+        # KIỂM TRA CẤM GAME (ID 10)
+        if is_game_banned(uid, 10):
+            return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
+
         if check_mt('mt_vongquay') and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, "⚙️ Game Vòng Quay đang bảo trì!")
         kb = [[InlineKeyboardButton("🎡 QUAY NGAY (5.000đ)", callback_data="spin_vq")],
@@ -1103,6 +1184,10 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await msg_vq.edit_text("💀 **MẤT LƯỢT!**\nChúc bạn may mắn lần sau.", parse_mode="Markdown")
 
     elif d == "menu_bc":
+        # KIỂM TRA CẤM GAME (ID 8)
+        if is_game_banned(uid, 8):
+            return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
+
         if check_mt('mt_baucua') and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, "⚙️ Game Bầu Cua đang bảo trì!")
         kb = []
@@ -1166,6 +1251,10 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     elif d == "menu_qs":
+        # KIỂM TRA CẤM GAME (ID 7)
+        if is_game_banned(uid, 7):
+            return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
+
         if check_mt('mt_quayso') and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, "⚙️ Game Quay Số đang bảo trì!")
         kb = []
@@ -1211,6 +1300,10 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     elif d == "menu_race":
+        # KIỂM TRA CẤM GAME (ID 3)
+        if is_game_banned(uid, 3):
+            return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
+
         if check_mt('mt_duaxe') and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, "⚙️ Game Đua Xe đang bảo trì!")
         kb = []
@@ -1238,6 +1331,10 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await play_car_race(update, ctx, choice, amt)
 
     elif d == "menu_mines":
+        # KIỂM TRA CẤM GAME (ID 4)
+        if is_game_banned(uid, 4):
+            return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
+
         if check_mt('mt_domin') and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, "⚙️ Game Dò Mìn đang bảo trì!")
         kb = []
@@ -1303,9 +1400,13 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(f"🎉 **CHÚC MỪNG!**\nBạn đã chốt lời thành công: `+{amt:,}đ`\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
 
     elif d == "menu_tx" or d == "menu_ball" or d == "menu_xocdia":
-        if "tx" in d: g_type, g_name, mt_key = "tx", "🎲 TÀI XỈU 3D", "mt_taixiu"
-        elif "ball" in d: g_type, g_name, mt_key = "ball", "⚽️ BÓNG ĐÁ PENALTY", "mt_penalty"
-        else: g_type, g_name, mt_key = "xd", "💿 XÓC ĐĨA VIP", "mt_xocdia"
+        if "tx" in d: g_type, g_name, mt_key, gid = "tx", "🎲 TÀI XỈU 3D", "mt_taixiu", 1
+        elif "ball" in d: g_type, g_name, mt_key, gid = "ball", "⚽️ BÓNG ĐÁ PENALTY", "mt_penalty", 5
+        else: g_type, g_name, mt_key, gid = "xd", "💿 XÓC ĐĨA VIP", "mt_xocdia", 2
+
+        # CHÈN KIỂM TRA CẤM GAME
+        if is_game_banned(uid, gid):
+            return await ctx.bot.send_message(uid, f"❌ Bạn đã bị cấm chơi trò {g_name}. Vui lòng liên hệ Admin!")
 
         if check_mt(mt_key) and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, f"⚙️ Game {g_name} đang bảo trì!")
@@ -1436,6 +1537,10 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             , parse_mode="Markdown")
 
     elif d == "menu_wooden":
+        # KIỂM TRA CẤM GAME (ID 6)
+        if is_game_banned(uid, 6):
+            return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
+
         if check_mt('mt_gomo') and uid not in ADMIN_IDS:
             return await ctx.bot.send_message(uid, "⚙️ Game Gõ Mõ đang bảo trì!")
         kb = []
@@ -1568,8 +1673,11 @@ app.add_handler(CommandHandler("give", give_money_cmd))
 app.add_handler(CommandHandler("top", top_cmd))
 app.add_handler(CommandHandler("setname", set_bot_name_cmd))
 
-# ĐĂNG KÝ COMMAND MỚI: THONGKE (Thay thế dashboard)
+# ĐĂNG KÝ COMMAND MỚI
 app.add_handler(CommandHandler("thongke", dashboard_cmd))
+app.add_handler(CommandHandler("tong", tong_cmd))
+app.add_handler(CommandHandler("cam", cam_cmd))
+app.add_handler(CommandHandler("bocam", bocam_cmd))
 
 # ĐĂNG KÝ JOB CHẠY TỰ ĐỘNG BẢO HIỂM VIP LÚC 00:00:01 HÀNG NGÀY
 if app.job_queue:
