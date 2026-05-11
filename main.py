@@ -1809,23 +1809,20 @@ application.add_handler(CommandHandler("group_status", group_status_cmd))
 
 # Job tự động bảo hiểm VIP
 if application.job_queue:
-application.job_queue.run_daily(...)(bao_hiem_vip, time=datetime.strptime("00:00:01", "%H:%M:%S").time())
+    application.job_queue.run_daily(bao_hiem_vip, time=datetime.strptime("00:00:01", "%H:%M:%S").time())
 
 application.add_handler(CallbackQueryHandler(handle_callback))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_handler))
 
 # ===== KHỞI ĐỘNG GAME CHO NHÓM =====
-# 👇 THAY THẾ BẰNG ID NHÓM CỦA BẠN (lấy từ @userinfobot)
-GROUP_IDS = [-1003663678808]  # <--- QUAN TRỌNG: NHẬP ID NHÓM CỦA BẠN VÀO ĐÂY
+# 🚩 THAY THẾ BẰNG ID NHÓM CỦA BẠN (lấy từ @userinfobot)
+GROUP_IDS = [-1003663678808] 
 
-print("BOT ĐÃ SẴN SÀNG VỚI ID GAME CHUẨN VÀ TÍNH NĂNG MỚI!")
-
-# Khởi động bot
 async def main():
     # 1. Khởi tạo bot
     await application.initialize()
     await application.start()
-    
+
     # 2. Khởi động game cho từng nhóm (Tài Xỉu)
     for gid in GROUP_IDS:
         try:
@@ -1836,10 +1833,9 @@ async def main():
 
     # 3. Bắt đầu nhận tin nhắn
     await application.updater.start_polling(drop_pending_updates=True)
-    print("--- BOT ĐANG ONLINE ---")
+    print("--- BOT ĐÃ ONLINE VÀ ĐANG ĐỢI LỆNH ---")
     
-    # 4. QUAN TRỌNG: Dòng này giúp bot không bị "Completed"
-    # Nó sẽ giữ bot chạy mãi mãi cho đến khi bạn tắt thủ công
+    # 4. QUAN TRỌNG: Giữ cho script luôn chạy, không bị "Completed"
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
@@ -1848,4 +1844,4 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, SystemExit):
         pass
     except Exception as e:
-        print(f"Lỗi: {e}")
+        print(f"Lỗi khởi động: {e}")
