@@ -3162,7 +3162,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             for i in range(15):
                 icon = "💎" if i in game["opened"] else "❓"
                 row.append(InlineKeyboardButton(icon, callback_data=f"play_mine_{i}"))
-                if (i+1) % 3 == 
                 if (i+1) % 3 == 0:
                     kb.append(row)
                     row = []
