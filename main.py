@@ -2016,7 +2016,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "✨ **CHÀO MỪNG THÀNH VIÊN MỚI!** ✨\n\n"
             "📌 **HƯỚNG DẪN NHẬN CODE:**\n"
             "• Liên hệ CSKH để được cấp CODE TÂN THỦ\n"
-            "• CODE có giá trị: `50,000đ`\n"
+            "• CODE có giá trị: `20,000đ`\n"
             "• Mỗi tài khoản chỉ nhận được 1 lần\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📞 **CSKH1:** @sakuri0\n"
