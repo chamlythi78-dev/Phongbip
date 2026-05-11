@@ -59,17 +59,17 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
     """Chạy một chu kỳ game trong nhóm - ĐÃ SỬA: TUNG XÚC SẮC THẬT BẰNG TELEGRAM DICE"""
     while True:
         try:
-            # Khởi tạo trạng thái game mới
+            # Khởi tạo trạng thái game mới - HỖ TRỢ CẢ 4 CỬA
             game_state = {
                 "status": "betting",
-                "bets": {},
+                "bets": {},  # Lưu chi tiết từng user: {user_id: {"amount": x, "choice": "tai/xiu/chan/le", "username": y}}
                 "message_id": None,
                 "cycle_start": datetime.now()
             }
             group_games[group_id] = game_state
 
             # 1. Gửi tin nhắn mở cược
-            bet_options_text = "\n".join([f"• {amount:,}đ - t {amount} hoặc x {amount}" for amount in DEFAULT_BET_AMOUNTS])
+            bet_options_text = "\n".join([f"• {amount:,}đ - t {amount} hoặc x {amount} hoặc c {amount} hoặc l {amount}" for amount in DEFAULT_BET_AMOUNTS])
             start_msg = await bot.send_message(
                 chat_id,
                 f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
@@ -77,7 +77,9 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 f"⏱️ Thời gian còn lại: `60s`\n\n"
                 f"🎯 **CÁCH CHƠI:**\n"
                 f"• Tài (11-18 điểm): `t [số_tiền]`\n"
-                f"• Xỉu (3-10 điểm): `x [số_tiền]`\n\n"
+                f"• Xỉu (3-10 điểm): `x [số_tiền]`\n"
+                f"• Chẵn (tổng điểm chẵn): `c [số_tiền]`\n"
+                f"• Lẻ (tổng điểm lẻ): `l [số_tiền]`\n\n"
                 f"💰 **MỨC CƯỢC:**\n{bet_options_text}\n\n"
                 f"🏆 **Tỉ lệ thưởng: x1.95**",
                 parse_mode="Markdown"
@@ -94,14 +96,28 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
 
                 if current_second in DEFAULT_REMINDER_INTERVALS and current_second != last_reminder_second:
                     last_reminder_second = current_second
+                    
+                    # Thống kê theo từng cửa
+                    tai_count = sum(1 for b in game_state['bets'].values() if b["choice"] == "tai")
+                    xiu_count = sum(1 for b in game_state['bets'].values() if b["choice"] == "xiu")
+                    chan_count = sum(1 for b in game_state['bets'].values() if b["choice"] == "chan")
+                    le_count = sum(1 for b in game_state['bets'].values() if b["choice"] == "le")
+                    total_players = len(game_state['bets'])
+                    
                     try:
                         if current_second >= 10:
                             await bot.edit_message_text(
                                 f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
                                 f"⚡ **ĐẶT CƯỢC NGAY!**\n"
                                 f"⏱️ Thời gian còn lại: `{current_second}s`\n\n"
-                                f"💰 Đã có `{len(game_state['bets'])}` người tham gia đặt cược.\n"
-                                f"📝 Lệnh: `t [tiền]` cho TÀI, `x [tiền]` cho XỈU",
+                                f"💰 **THỐNG KÊ CƯỢC:**\n"
+                                f"🎲 TÀI: `{tai_count}` người\n"
+                                f"🎲 XỈU: `{xiu_count}` người\n"
+                                f"🔴 CHẴN: `{chan_count}` người\n"
+                                f"⚪ LẺ: `{le_count}` người\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"👥 Tổng số người: `{total_players}`\n"
+                                f"📝 Lệnh: `t [tiền]` (TÀI), `x [tiền]` (XỈU), `c [tiền]` (CHẴN), `l [tiền]` (LẺ)",
                                 chat_id=chat_id,
                                 message_id=game_state["message_id"],
                                 parse_mode="Markdown"
@@ -111,7 +127,8 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                                 f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
                                 f"⚠️ **CHUẨN BỊ ĐÓNG CƯỢC!**\n"
                                 f"⏱️ Còn `{current_second}s`...\n\n"
-                                f"💰 Đã có `{len(game_state['bets'])}` người đặt cược.",
+                                f"💰 Đã có `{total_players}` người đặt cược.\n"
+                                f"🎲 TÀI:{tai_count} | XỈU:{xiu_count} | CHẴN:{chan_count} | LẺ:{le_count}",
                                 chat_id=chat_id,
                                 message_id=game_state["message_id"],
                                 parse_mode="Markdown"
@@ -126,11 +143,24 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
             player_count = len(game_state['bets'])
             total_bet_before = sum(b["amount"] for b in game_state['bets'].values())
             
+            # Thống kê theo cửa
+            tai_total = sum(b["amount"] for b in game_state['bets'].values() if b["choice"] == "tai")
+            xiu_total = sum(b["amount"] for b in game_state['bets'].values() if b["choice"] == "xiu")
+            chan_total = sum(b["amount"] for b in game_state['bets'].values() if b["choice"] == "chan")
+            le_total = sum(b["amount"] for b in game_state['bets'].values() if b["choice"] == "le")
+            
             await bot.edit_message_text(
                 f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
                 f"🔒 **ĐÃ KHÓA CƯỢC!**\n"
                 f"👥 Số người chơi: `{player_count}`\n"
-                f"💰 Tổng cược: `{total_bet_before:,}đ`\n\n"
+                f"💰 Tổng cược: `{total_bet_before:,}đ`\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📊 **CHI TIẾT CƯỢC:**\n"
+                f"🎲 TÀI: `{tai_total:,}đ`\n"
+                f"🎲 XỈU: `{xiu_total:,}đ`\n"
+                f"🔴 CHẴN: `{chan_total:,}đ`\n"
+                f"⚪ LẺ: `{le_total:,}đ`\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🎲 Đang tung xúc sắc...",
                 chat_id=chat_id,
                 message_id=game_state["message_id"],
@@ -153,10 +183,12 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
             dice2 = dice2_msg.dice.value
             dice3 = dice3_msg.dice.value
             total = dice1 + dice2 + dice3
-            result = "tai" if total >= 11 else "xiu"
-            result_text = "TÀI" if result == "tai" else "XỈU"
+            result_tx = "tai" if total >= 11 else "xiu"
+            result_cl = "chan" if total % 2 == 0 else "le"
+            result_text_tx = "TÀI" if result_tx == "tai" else "XỈU"
+            result_text_cl = "CHẴN" if result_cl == "chan" else "LẺ"
 
-            print(f"🎲 Kết quả thật: {dice1}-{dice2}-{dice3} = {total} ({result_text})")
+            print(f"🎲 Kết quả thật: {dice1}-{dice2}-{dice3} = {total} ({result_text_tx} - {result_text_cl})")
             print(f"👥 Số cược trong game: {len(game_state['bets'])}")
 
             # 5. Tính toán kết quả và cập nhật tiền
@@ -166,14 +198,26 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
 
             for uid, bet_info in game_state["bets"].items():
                 total_bet_amount += bet_info["amount"]
-                if bet_info["choice"] == result:
+                choice = bet_info["choice"]
+                is_win = False
+                
+                if choice == "tai" and result_tx == "tai":
+                    is_win = True
+                elif choice == "xiu" and result_tx == "xiu":
+                    is_win = True
+                elif choice == "chan" and result_cl == "chan":
+                    is_win = True
+                elif choice == "le" and result_cl == "le":
+                    is_win = True
+                
+                if is_win:
                     # THẮNG: Cộng tiền thưởng (x1.95)
                     win_amount = int(bet_info["amount"] * 1.95)
-                    add_money(uid, win_amount, f"Thắng Tài Xỉu nhóm: {result_text}")
-                    winners.append((uid, bet_info["amount"], win_amount))
+                    add_money(uid, win_amount, f"Thắng Tài Xỉu nhóm: {choice.upper()}")
+                    winners.append((uid, bet_info["amount"], win_amount, choice))
                 else:
                     # THUA: Đã trừ tiền lúc đặt cược
-                    losers.append((uid, bet_info["amount"]))
+                    losers.append((uid, bet_info["amount"], choice))
 
             # 6. Gửi kết quả cuối cùng
             result_message = (
@@ -181,7 +225,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🎲 **XÚC SẮC:** `{dice1}` - `{dice2}` - `{dice3}`\n"
                 f"📊 **TỔNG:** `{total}` điểm\n"
-                f"🏆 **KẾT QUẢ:** **{result_text}**\n"
+                f"🏆 **KẾT QUẢ:** **{result_text_tx}** - **{result_text_cl}**\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"📈 **THỐNG KÊ CƯỢC:**\n"
                 f"👥 Người chơi: `{len(game_state['bets'])}`\n"
@@ -191,15 +235,15 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
 
             if winners:
                 result_message += f"🎉 **NGƯỜI THẮNG ({len(winners)}):**\n"
-                for uid, bet, win in winners[:10]:
-                    result_message += f"  👤 ID `{uid}`: cược `{bet:,}đ` → nhận `{win:,}đ`\n"
+                for uid, bet, win, ch in winners[:10]:
+                    result_message += f"  👤 ID `{uid}`: {ch.upper()} cược `{bet:,}đ` → nhận `{win:,}đ`\n"
                 if len(winners) > 10:
                     result_message += f"  ... và {len(winners) - 10} người khác\n"
 
             if losers:
                 result_message += f"\n💀 **NGƯỜI THUA ({len(losers)}):**\n"
-                for uid, bet in losers[:10]:
-                    result_message += f"  👤 ID `{uid}`: thua `{bet:,}đ`\n"
+                for uid, bet, ch in losers[:10]:
+                    result_message += f"  👤 ID `{uid}`: {ch.upper()} thua `{bet:,}đ`\n"
                 if len(losers) > 10:
                     result_message += f"  ... và {len(losers) - 10} người khác\n"
 
@@ -223,7 +267,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
             await asyncio.sleep(10)
 
 async def place_bet_in_group(bot, user_id: int, group_id: int, choice: str, amount: int, username: str = ""):
-    """Xử lý đặt cược của người dùng trong game nhóm"""
+    """Xử lý đặt cược của người dùng trong game nhóm - HỖ TRỢ TÀI/XỈU/CHẴN/LẺ"""
     game = group_games.get(group_id)
     if not game or game["status"] != "betting":
         return False, "❌ Hiện tại không có phiên cược nào đang mở! Vui lòng chờ ván tiếp theo."
@@ -234,6 +278,10 @@ async def place_bet_in_group(bot, user_id: int, group_id: int, choice: str, amou
 
     if user_id in game["bets"]:
         return False, "❌ Bạn đã đặt cược trong ván này rồi! Hãy chờ ván tiếp theo."
+
+    # Kiểm tra mức cược hợp lệ
+    if amount not in DEFAULT_BET_AMOUNTS:
+        return False, f"❌ Mức cược không hợp lệ! Cho phép: {', '.join([str(a) for a in DEFAULT_BET_AMOUNTS])}đ"
 
     # Trừ tiền ngay lập tức
     note = f"Cược {choice.upper()} nhóm - {amount:,}đ"
@@ -548,7 +596,7 @@ def get_remaining_bet_required(user_id):
     required_bet, current_bet = bonus_data[0]
     return max(0, required_bet - current_bet)
 
-# ===== ADMIN COMMANDS =====
+# ===== ADMIN COMMANDS (GIỮ NGUYÊN) =====
 @admin_only
 async def dashboard_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     today = datetime.now().strftime("%d/%m/%Y")
@@ -721,7 +769,7 @@ async def xoals_user_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ ID không hợp lệ.")
 
-# ===== QUẢN LÝ ADMIN =====
+# ===== QUẢN LÝ ADMIN (GIỮ NGUYÊN) =====
 async def cam_admin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Cấm admin khác sử dụng lệnh - /camadmin [id] [lý do]"""
     user_id = update.effective_user.id
@@ -1010,7 +1058,7 @@ async def baotri_hethong_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ Sai cú pháp! Dùng `on` hoặc `off`", parse_mode="Markdown")
 
-# ===== LOGIC GAMES ANIMATION =====
+# ===== LOGIC GAMES ANIMATION (GIỮ NGUYÊN) =====
 async def play_car_race(update: Update, ctx: ContextTypes.DEFAULT_TYPE, choice, amt):
     uid = update.effective_user.id
     if is_game_banned(uid, 3):
@@ -1145,7 +1193,7 @@ async def baotri_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🛠 **BẢNG QUẢN LÝ BẢO TRÌ**\n(Bấm để chuyển trạng thái On/Off)", 
                                    reply_markup=InlineKeyboardMarkup(kb))
 
-# ===== LỆNH NẠP TIỀN ADMIN (ĐÃ SỬA - THÊM KHUYẾN MÃI) =====
+# ===== LỆNH NẠP TIỀN ADMIN (GIỮ NGUYÊN) =====
 @admin_only
 async def nap_tien_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Nạp tiền cho người dùng - /nap [id] [số_tiền]"""
@@ -1575,6 +1623,61 @@ async def bet_xiu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     success, message = await place_bet_in_group(ctx.bot, user_id, group_id, "xiu", amount, username)
     await update.message.reply_text(message, parse_mode="Markdown")
 
+# ===== LỆNH MỚI: CHẴN (c) và LẺ (l) =====
+async def bet_chan_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Đặt cược CHẴN trong nhóm - lệnh /c [số_tiền] (chữ thường hoặc hoa đều được)"""
+    if update.effective_chat.type == "private":
+        await update.message.reply_text("⚠️ Lệnh này chỉ sử dụng được trong NHÓM game!")
+        return
+    user_id = update.effective_user.id
+    group_id = update.effective_chat.id
+    username = update.effective_user.username or update.effective_user.first_name
+    if is_banned(user_id):
+        await update.message.reply_text("❌ Bạn đã bị khóa tài khoản!")
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"❌ Vui lòng nhập số tiền cược!\n"
+            f"Cú pháp: `c [số_tiền]` (cửa CHẴN - tổng điểm xúc sắc là số chẵn)\n"
+            f"Các mức cược hợp lệ: {', '.join([str(a) for a in DEFAULT_BET_AMOUNTS])}đ",
+            parse_mode="Markdown"
+        )
+        return
+    try:
+        amount = int(ctx.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Số tiền không hợp lệ!")
+        return
+    success, message = await place_bet_in_group(ctx.bot, user_id, group_id, "chan", amount, username)
+    await update.message.reply_text(message, parse_mode="Markdown")
+
+async def bet_le_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Đặt cược LẺ trong nhóm - lệnh /l [số_tiền] (chữ thường hoặc hoa đều được)"""
+    if update.effective_chat.type == "private":
+        await update.message.reply_text("⚠️ Lệnh này chỉ sử dụng được trong NHÓM game!")
+        return
+    user_id = update.effective_user.id
+    group_id = update.effective_chat.id
+    username = update.effective_user.username or update.effective_user.first_name
+    if is_banned(user_id):
+        await update.message.reply_text("❌ Bạn đã bị khóa tài khoản!")
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"❌ Vui lòng nhập số tiền cược!\n"
+            f"Cú pháp: `l [số_tiền]` (cửa LẺ - tổng điểm xúc sắc là số lẻ)\n"
+            f"Các mức cược hợp lệ: {', '.join([str(a) for a in DEFAULT_BET_AMOUNTS])}đ",
+            parse_mode="Markdown"
+        )
+        return
+    try:
+        amount = int(ctx.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Số tiền không hợp lệ!")
+        return
+    success, message = await place_bet_in_group(ctx.bot, user_id, group_id, "le", amount, username)
+    await update.message.reply_text(message, parse_mode="Markdown")
+
 async def group_status_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Kiểm tra trạng thái game trong nhóm"""
     if update.effective_chat.type == "private":
@@ -1583,13 +1686,13 @@ async def group_status_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     group_id = update.effective_chat.id
     status = get_group_game_status(group_id)
     if status == "betting":
-        await update.message.reply_text("🎲 **ĐANG MỞ CƯỢC!**\nHãy đặt cược ngay: `t [tiền]` cho TÀI, `x [tiền]` cho XỈU", parse_mode="Markdown")
+        await update.message.reply_text("🎲 **ĐANG MỞ CƯỢC!**\nHãy đặt cược ngay: `t [tiền]` (TÀI), `x [tiền]` (XỈU), `c [tiền]` (CHẴN), `l [tiền]` (LẺ)", parse_mode="Markdown")
     elif status == "rolling":
         await update.message.reply_text("🎲 **ĐANG TUNG XÚC SẮC!**\nVui lòng chờ kết quả...", parse_mode="Markdown")
     else:
         await update.message.reply_text("⏸️ **CHƯA CÓ PHIÊN CƯỢC NÀO**\nVán mới sẽ bắt đầu sau vài giây...", parse_mode="Markdown")
 
-# ===== LỆNH RÚT TIỀN (ĐÃ SỬA - THÊM KIỂM TRA x3vc VÀ MIN RÚT 50K) =====
+# ===== LỆNH RÚT TIỀN (GIỮ NGUYÊN) =====
 async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
@@ -1669,7 +1772,7 @@ async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except: 
         await update.message.reply_text("❌ Số tiền không hợp lệ.")
 
-# ===== START & REF SYSTEM =====
+# ===== START & REF SYSTEM (GIỮ NGUYÊN) =====
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
@@ -1747,7 +1850,7 @@ async def history_pro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(msg, parse_mode="Markdown")
 
-# ===== HANDLE MENU MESSAGES =====
+# ===== HANDLE MENU MESSAGES (GIỮ NGUYÊN) =====
 async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid, txt = update.effective_user.id, update.message.text
     if not txt or is_banned(uid): return
@@ -1869,9 +1972,9 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 return await update.message.reply_text("⚙️ Game Tài Xỉu đang bảo trì!")
             return await play_dice_animation(update, code, amt)
 
-# ===== XỬ LÝ TIN NHẮN NHÓM =====
+# ===== XỬ LÝ TIN NHẮN NHÓM (ĐÃ THÊM LỆNH c và l) =====
 async def handle_group_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Xử lý tin nhắn trong nhóm để bắt lệnh không dấu / như 't 10000'"""
+    """Xử lý tin nhắn trong nhóm để bắt lệnh không dấu / như 't 10000', 'c 10000', 'l 10000'"""
     if update.effective_chat.type == "private":
         await main_handler(update, ctx)
         return
@@ -1917,9 +2020,38 @@ async def handle_group_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Số tiền không hợp lệ!")
         return
     
+    # ===== LỆNH MỚI: c và l (CHẴN và LẺ) - KHÔNG PHÂN BIỆT HOA THƯỜNG =====
+    if command == "c" and len(parts) >= 2:
+        try:
+            amount = int(parts[1])
+            fake_ctx = type('obj', (object,), {
+                'bot': ctx.bot, 
+                'args': [str(amount)],
+                'user_data': ctx.user_data,
+                'chat_data': ctx.chat_data
+            })()
+            await bet_chan_group(update, fake_ctx)
+        except ValueError:
+            await update.message.reply_text("❌ Số tiền không hợp lệ!")
+        return
+    
+    if command == "l" and len(parts) >= 2:
+        try:
+            amount = int(parts[1])
+            fake_ctx = type('obj', (object,), {
+                'bot': ctx.bot, 
+                'args': [str(amount)],
+                'user_data': ctx.user_data,
+                'chat_data': ctx.chat_data
+            })()
+            await bet_le_group(update, fake_ctx)
+        except ValueError:
+            await update.message.reply_text("❌ Số tiền không hợp lệ!")
+        return
+    
     await main_handler(update, ctx)
 
-# ===== CALLBACK HANDLER =====
+# ===== CALLBACK HANDLER (GIỮ NGUYÊN) =====
 async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     d = q.data
@@ -2594,9 +2726,11 @@ application.add_handler(CommandHandler("listbannedadmins", list_banned_admins_cm
 # Handler bảo trì toàn hệ thống
 application.add_handler(CommandHandler("baotrihethong", baotri_hethong_cmd))
 
-# Handler mới cho game trong nhóm
+# Handler cho game trong nhóm (ĐÃ THÊM c và l)
 application.add_handler(CommandHandler("t", bet_tai_group))
 application.add_handler(CommandHandler("x", bet_xiu_group))
+application.add_handler(CommandHandler("c", bet_chan_group))   # LỆNH MỚI: CHẴN
+application.add_handler(CommandHandler("l", bet_le_group))     # LỆNH MỚI: LẺ
 application.add_handler(CommandHandler("group_status", group_status_cmd))
 
 # ===== HANDLER MỚI THÊM =====
