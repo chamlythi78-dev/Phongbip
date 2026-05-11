@@ -1958,11 +1958,11 @@ def get_promotion_text():
     text += "📌 **LƯU Ý:**\n"
     text += "• ⏰ Mỗi ngày được nhận 1 lần\n"
     text += "• 💰 Tiền khuyến mãi cần cược **x3** vòng để rút\n"
-    text += "• 🎮 Liên hệ CSKH để nhận khuyến mãi sau khi nạp\n"
+    text += "• 🎮 khuyến mãi sau khi nạp tự động lên 100%\n"
     text += "━━━━━━━━━━━━━━━━━━━━━\n"
     text += "📞 **CSKH1:** @sakuri0\n"
-    text += "📞 **CSKH2:** @sakuri0\n"
-    text += "📞 **CSKH3:** @sakuri0"
+    text += "📞 **CSKH2:** @RoGarden\n"
+    text += "📞 **CSKH3:** @tomm2710"
     return text
 
 # ===== HANDLE MENU MESSAGES (ĐÃ THÊM MENU MỚI) =====
@@ -2027,8 +2027,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("📞 CSKH1", url="https://t.me/sakuri0"),
-             InlineKeyboardButton("📞 CSKH2", url="https://t.me/sakuri0"),
-             InlineKeyboardButton("📞 CSKH3", url="https://t.me/sakuri0")]
+             InlineKeyboardButton("📞 CSKH2", url="https://t.me/RoGarden"),
+             InlineKeyboardButton("📞 CSKH3", url="https://t.me/tomm2710")]
         ])
         return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
 
@@ -2037,8 +2037,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         promo_text = get_promotion_text()
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("📞 CSKH1", url="https://t.me/sakuri0"),
-             InlineKeyboardButton("📞 CSKH2", url="https://t.me/sakuri0"),
-             InlineKeyboardButton("📞 CSKH3", url="https://t.me/sakuri0")]
+             InlineKeyboardButton("📞 CSKH2", url="https://t.me/RoGarden"),
+             InlineKeyboardButton("📞 CSKH3", url="https://t.me/tomm2710")]
         ])
         return await update.message.reply_text(promo_text, reply_markup=kb, parse_mode="Markdown")
 
