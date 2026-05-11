@@ -1128,7 +1128,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await top_cmd(update, ctx)
 
     if txt == "🎁 Nhận Code Free":
-    kb = InlineKeyboardMarkup([
+        kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("📺 THAM GIA NHÓM NHẬN CODE", url="https://t.me/sunwin988")],
         [InlineKeyboardButton("📢 KÊNH THÔNG BÁO", url="https://t.me/sunwin988")]
     ])
