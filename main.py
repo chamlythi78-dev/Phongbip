@@ -832,7 +832,7 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     res = query("SELECT COUNT(*) FROM users")
     total = res[0][0] if res else 0
-    await update.message.reply_text(f"📊 **THÔNG KÊ:**\n\n👥 Tổng số người dùng: `{total}`", parse_mode="Markdown")
+    await update.message.reply_text(f"📊 **THỐNG KÊ:**\n\n👥 Tổng số người dùng: `{total}`", parse_mode="Markdown")
 
 async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
     if update.effective_user.id not in ADMIN_IDS: return
@@ -1129,40 +1129,40 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if txt == "🎁 Nhận Code Free":
         kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📺 THAM GIA NHÓM NHẬN CODE", url="https://t.me/sunwin988")],
-        [InlineKeyboardButton("📢 KÊNH THÔNG BÁO", url="https://t.me/sunwin988")]
-    ])
-    msg = (
-        "🎁 **NHẬN GIFTCODE MIỄN PHÍ**\n\n"
-        "Tham gia các nhóm dưới đây để săn mã Code thưởng mỗi ngày từ Admin!\n\n"
-        "📖 **CÁCH NHẬP CODE:**\n"
-        "Gõ lệnh: `/code [mã_quà_tặng]`\n"
-        "Ví dụ: `/code VUAVIP2024`\n\n"
-        "👇 **Tham gia ngay tại đây:**"
-    )
-    return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True)
+            [InlineKeyboardButton("📺 THAM GIA NHÓM NHẬN CODE", url="https://t.me/sunwin988")],
+            [InlineKeyboardButton("📢 KÊNH THÔNG BÁO", url="https://t.me/sunwin988")]
+        ])
+        msg = (
+            "🎁 **NHẬN GIFTCODE MIỄN PHÍ**\n\n"
+            "Tham gia các nhóm dưới đây để săn mã Code thưởng mỗi ngày từ Admin!\n\n"
+            "📖 **CÁCH NHẬP CODE:**\n"
+            "Gõ lệnh: `/code [mã_quà_tặng]`\n"
+            "Ví dụ: `/code VUAVIP2024`\n\n"
+            "👇 **Tham gia ngay tại đây:**"
+        )
+        return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True)
 
-if txt == "💳 Nạp tiền":
-    if is_feature_banned(uid, 'nap'):
-        return await user_reply.reply_text("❌ Tính năng NẠP TIỀN của bạn đã bị khóa. Vui lòng liên hệ Admin!")
-    if check_mt('mt_nap') and uid not in ADMIN_IDS:
-        return await user_reply.reply_text("⚙️ Hệ thống Nạp Tiền đang bảo trì!")
-    qr_link, qr_text = get_deposit_info(uid)    
-    return await user_reply.reply_photo(photo=qr_link, caption=qr_text, parse_mode="Markdown")
+    if txt == "💳 Nạp tiền":
+        if is_feature_banned(uid, 'nap'):
+            return await user_reply.reply_text("❌ Tính năng NẠP TIỀN của bạn đã bị khóa. Vui lòng liên hệ Admin!")
+        if check_mt('mt_nap') and uid not in ADMIN_IDS:
+            return await user_reply.reply_text("⚙️ Hệ thống Nạp Tiền đang bảo trì!")
+        qr_link, qr_text = get_deposit_info(uid)    
+        return await user_reply.reply_photo(photo=qr_link, caption=qr_text, parse_mode="Markdown")
 
-if txt == "🎮 Danh sách game":
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx"), InlineKeyboardButton("💿 XÓC ĐĨA", callback_data="menu_xocdia")],
-        [InlineKeyboardButton("🏎️ ĐUA XE (RACE)", callback_data="menu_race"), 
-         InlineKeyboardButton("💣 Dò Mìn", callback_data="menu_mines")],
-        [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
-         InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
-        [InlineKeyboardButton("🔢 QUAY SỐ (1-3)", callback_data="menu_qs"),
-         InlineKeyboardButton("🦀 BẦU CUA TÔM CÁ", callback_data="menu_bc")],
-        [InlineKeyboardButton("📉 XỔ SỐ MIỀN BẮC", callback_data="menu_xoso"),
-         InlineKeyboardButton("🎡 VÒNG QUAY MAY MẮN", callback_data="menu_vq")]
-    ])
-    return await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
+    if txt == "🎮 Danh sách game":
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx"), InlineKeyboardButton("💿 XÓC ĐĨA", callback_data="menu_xocdia")],
+            [InlineKeyboardButton("🏎️ ĐUA XE (RACE)", callback_data="menu_race"), 
+             InlineKeyboardButton("💣 Dò Mìn", callback_data="menu_mines")],
+            [InlineKeyboardButton("⚽️ PENALTY", callback_data="menu_ball"), 
+             InlineKeyboardButton("🪵 GÕ MÕ", callback_data="menu_wooden")],
+            [InlineKeyboardButton("🔢 QUAY SỐ (1-3)", callback_data="menu_qs"),
+             InlineKeyboardButton("🦀 BẦU CUA TÔM CÁ", callback_data="menu_bc")],
+            [InlineKeyboardButton("📉 XỔ SỐ MIỀN BẮC", callback_data="menu_xoso"),
+             InlineKeyboardButton("🎡 VÒNG QUAY MAY MẮN", callback_data="menu_vq")]
+        ])
+        return await user_reply.reply_text("🎮 **DANH SÁCH TRÒ CHƠI**\nVui lòng chọn game bạn muốn chơi:", reply_markup=kb, parse_mode="Markdown")
 
     if txt == "🛒 Rút tiền":
         if is_feature_banned(uid, 'rut'):
