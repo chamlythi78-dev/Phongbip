@@ -1447,12 +1447,6 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 return await update.message.reply_text("⚙️ Game Tài Xỉu đang bảo trì!")
             return await play_dice_animation(update, code, amt)
 
-    if uid not in ADMIN_IDS:
-        for aid in ADMIN_IDS:
-            try: await ctx.bot.send_message(chat_id=aid, text=f"📨 **TIN NHẮN HỖ TRỢ**\n👤 ID: `{uid}`\n📝 Nội dung: {txt}", parse_mode="Markdown")
-            except: pass
-        await user_reply.reply_text("✅ Đã gửi yêu cầu tới Admin!")
-
 # ===== XỬ LÝ TIN NHẮN NHÓM (LỆNH KHÔNG DẤU /) =====
 async def handle_group_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Xử lý tin nhắn trong nhóm để bắt lệnh không dấu / như 't 10000'"""
