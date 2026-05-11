@@ -37,8 +37,8 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 f"⚡ **ĐẶT CƯỢC NGAY!**\n"
                 f"⏱️ Thời gian còn lại: `60s`\n\n"
                 f"🎯 **CÁCH CHƠI:**\n"
-                f"• Tài (11-18 điểm): `/t [số_tiền]`\n"
-                f"• Xỉu (3-10 điểm): `/x [số_tiền]`\n\n"
+                f"• Tài (11-18 điểm): `t [số_tiền]`\n"
+                f"• Xỉu (3-10 điểm): `x [số_tiền]`\n\n"
                 f"💰 **MỨC CƯỢC:**\n{bet_options_text}\n\n"
                 f"🏆 **Tỉ lệ thưởng: x1.95**",
                 parse_mode="Markdown"
@@ -62,7 +62,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                                 f"⚡ **ĐẶT CƯỢC NGAY!**\n"
                                 f"⏱️ Thời gian còn lại: `{current_second}s`\n\n"
                                 f"💰 Đã có `{len(game_state['bets'])}` người tham gia đặt cược.\n"
-                                f"📝 Lệnh: `/t [tiền]` cho TÀI, `/x [tiền]` cho XỈU",
+                                f"📝 Lệnh: `t [tiền]` cho TÀI, `x [tiền]` cho XỈU",
                                 chat_id=chat_id,
                                 message_id=game_state["message_id"],
                                 parse_mode="Markdown"
