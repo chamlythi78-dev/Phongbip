@@ -1763,60 +1763,60 @@ async def main_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await handle(update, ctx)
 
 # ===== KHỞI CHẠY BOT =====
-app = ApplicationBuilder().token(TOKEN).build()
+application = ApplicationBuilder().token(TOKEN).build()
 
 # Các handler hiện có
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("baotri", baotri_cmd))
-app.add_handler(CommandHandler("code", nhap_code))
-app.add_handler(CommandHandler("taocode", tao_code))
-app.add_handler(CommandHandler("tilewin", tilewin_cmd)) 
-app.add_handler(CommandHandler("rut", rut))
-app.add_handler(CommandHandler("lienket", lien_ket))
-app.add_handler(CommandHandler("resetbank", reset_bank))
-app.add_handler(CommandHandler("resetall", reset_all_confirm)) 
-app.add_handler(CommandHandler("add", add))
-app.add_handler(CommandHandler("sub", sub))
-app.add_handler(CommandHandler("ban", ban))
-app.add_handler(CommandHandler("unban", unban))
-app.add_handler(CommandHandler("stats", stats))
-app.add_handler(CommandHandler("all", all_user))
-app.add_handler(CommandHandler("his", history_pro)) 
-app.add_handler(CommandHandler("hisall", history_all_admin))
-app.add_handler(CommandHandler("send", broadcast))
-app.add_handler(CommandHandler("rep", reply_user))
-app.add_handler(CommandHandler("check", check_user_history))
-app.add_handler(CommandHandler("info", admin_info)) 
-app.add_handler(CommandHandler("nap", nap_tien_admin))
-app.add_handler(CommandHandler("soduall", soduall_cmd))
-app.add_handler(CommandHandler("tileall", tileall_set_cmd))
-app.add_handler(CommandHandler("resetsdall", resetsdall_cmd))
-app.add_handler(CommandHandler("tile1", tile1_user_cmd))
-app.add_handler(CommandHandler("xoalsall", xoalsall_cmd))
-app.add_handler(CommandHandler("xoals", xoals_user_cmd))
-app.add_handler(CommandHandler("give", give_money_cmd))
-app.add_handler(CommandHandler("top", top_cmd))
-app.add_handler(CommandHandler("setname", set_bot_name_cmd))
-app.add_handler(CommandHandler("thongke", dashboard_cmd))
-app.add_handler(CommandHandler("tong", tong_cmd))
-app.add_handler(CommandHandler("cam", cam_cmd))
-app.add_handler(CommandHandler("bocam", bocam_cmd))
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("baotri", baotri_cmd))
+application.add_handler(CommandHandler("code", nhap_code))
+application.add_handler(CommandHandler("taocode", tao_code))
+application.add_handler(CommandHandler("tilewin", tilewin_cmd)) 
+application.add_handler(CommandHandler("rut", rut))
+application.add_handler(CommandHandler("lienket", lien_ket))
+application.add_handler(CommandHandler("resetbank", reset_bank))
+application.add_handler(CommandHandler("resetall", reset_all_confirm)) 
+application.add_handler(CommandHandler("add", add))
+application.add_handler(CommandHandler("sub", sub))
+application.add_handler(CommandHandler("ban", ban))
+application.add_handler(CommandHandler("unban", unban))
+application.add_handler(CommandHandler("stats", stats))
+application.add_handler(CommandHandler("all", all_user))
+application.add_handler(CommandHandler("his", history_pro)) 
+application.add_handler(CommandHandler("hisall", history_all_admin))
+application.add_handler(CommandHandler("send", broadcast))
+application.add_handler(CommandHandler("rep", reply_user))
+application.add_handler(CommandHandler("check", check_user_history))
+application.add_handler(CommandHandler("info", admin_info)) 
+application.add_handler(CommandHandler("nap", nap_tien_admin))
+application.add_handler(CommandHandler("soduall", soduall_cmd))
+application.add_handler(CommandHandler("tileall", tileall_set_cmd))
+application.add_handler(CommandHandler("resetsdall", resetsdall_cmd))
+application.add_handler(CommandHandler("tile1", tile1_user_cmd))
+application.add_handler(CommandHandler("xoalsall", xoalsall_cmd))
+application.add_handler(CommandHandler("xoals", xoals_user_cmd))
+application.add_handler(CommandHandler("give", give_money_cmd))
+application.add_handler(CommandHandler("top", top_cmd))
+application.add_handler(CommandHandler("setname", set_bot_name_cmd))
+application.add_handler(CommandHandler("thongke", dashboard_cmd))
+application.add_handler(CommandHandler("tong", tong_cmd))
+application.add_handler(CommandHandler("cam", cam_cmd))
+application.add_handler(CommandHandler("bocam", bocam_cmd))
 
 # Handler mới cho game trong nhóm
-app.add_handler(CommandHandler("t", bet_tai_group))   # Lệnh /t [số_tiền] cho TÀI
-app.add_handler(CommandHandler("x", bet_xiu_group))   # Lệnh /x [số_tiền] cho XỈU
-app.add_handler(CommandHandler("group_status", group_status_cmd))
+application.add_handler(CommandHandler("t", bet_tai_group))   # Lệnh /t [số_tiền] cho TÀI
+application.add_handler(CommandHandler("x", bet_xiu_group))   # Lệnh /x [số_tiền] cho XỈU
+application.add_handler(CommandHandler("group_status", group_status_cmd))
 
 # Job tự động bảo hiểm VIP
-if app.job_queue:
-    app.job_queue.run_daily(bao_hiem_vip, time=datetime.strptime("00:00:01", "%H:%M:%S").time())
+if application.job_queue:
+application.job_queue.run_daily(...)(bao_hiem_vip, time=datetime.strptime("00:00:01", "%H:%M:%S").time())
 
-app.add_handler(CallbackQueryHandler(handle_callback))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_handler))
+application.add_handler(CallbackQueryHandler(handle_callback))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_handler))
 
 # ===== KHỞI ĐỘNG GAME CHO NHÓM =====
 # 👇 THAY THẾ BẰNG ID NHÓM CỦA BẠN (lấy từ @userinfobot)
-GROUP_IDS = [-1001234567890]  # <--- QUAN TRỌNG: NHẬP ID NHÓM CỦA BẠN VÀO ĐÂY
+GROUP_IDS = [-1003663678808]  # <--- QUAN TRỌNG: NHẬP ID NHÓM CỦA BẠN VÀO ĐÂY
 
 print("BOT ĐÃ SẴN SÀNG VỚI ID GAME CHUẨN VÀ TÍNH NĂNG MỚI!")
 
