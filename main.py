@@ -230,17 +230,22 @@ MIN_WITHDRAW = 200000
 LOG_GROUP_ID = -1003663678808
 
 # THÔNG TIN NẠP TIỀN
-BANK_INFO = """
-🏦 **THÔNG TIN NẠP TIỀN**
---------------------------
-🏛 Ngân hàng: **MBBANK**
-👤 CTK: **LY THI CHAM**
-💳 STK: `0003456712345 `
-📝 NỘI DUNG CK: `{uid}`
---------------------------
-⚠️ *Lưu ý: Min nạp 20.000đ. Bạn vui lòng nhập đúng ID để hệ thống kiểm tra nhanh nhất!*
-"""
+BANK_ID = "MB"
+ACCOUNT_NO = "0003456712345"
+ACCOUNT_NAME = "LY THI CHAM"
 
+def get_deposit_info(user_id):
+    qr_url = f"https://img.vietqr.io/image/{BANK_ID}-{ACCOUNT_NO}-qr_only.png?amount=0&addInfo={user_id}&accountName={ACCOUNT_NAME}"
+    caption = (
+        "**🏦 THÔNG TIN NẠP TIỀN**\n\n"
+        f"🏦 Ngân hàng: **MBBANK**\n"
+        f"👤 CTK: **{ACCOUNT_NAME}**\n"
+        f"💳 STK: `{ACCOUNT_NO}`\n"
+        f"📝 Nội dung: `{user_id}`\n\n"
+        "⚠️ *Lưu ý: Quét mã QR để tự động điền nội dung. Hệ thống cộng tiền sau 1-3 phút.*"
+    )
+    return qr_url, caption
+    
 # ===== DATABASE SETUP (POSTGRESQL) =====
 def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL, sslmode='require')
@@ -1142,8 +1147,9 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return await user_reply.reply_text("❌ Tính năng NẠP TIỀN của bạn đã bị khóa. Vui lòng liên hệ Admin!")
         if check_mt('mt_nap') and uid not in ADMIN_IDS:
             return await user_reply.reply_text("⚙️ Hệ thống Nạp Tiền đang bảo trì!")
-        return await user_reply.reply_text(BANK_INFO.format(uid=uid), parse_mode="Markdown")
-
+                qr_link, qr_text = get_deposit_info(message.from_user.id)
+        bot.send_photo(message.chat.id, photo=qr_link, caption=qr_text, parse_mode="Markdown")
+        
     if txt == "🎮 Danh sách game":
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx"), InlineKeyboardButton("💿 XÓC ĐĨA", callback_data="menu_xocdia")],
