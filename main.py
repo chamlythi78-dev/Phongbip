@@ -1147,8 +1147,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return await user_reply.reply_text("❌ Tính năng NẠP TIỀN của bạn đã bị khóa. Vui lòng liên hệ Admin!")
         if check_mt('mt_nap') and uid not in ADMIN_IDS:
             return await user_reply.reply_text("⚙️ Hệ thống Nạp Tiền đang bảo trì!")
-                qr_link, qr_text = get_deposit_info(message.from_user.id)
-        bot.send_photo(message.chat.id, photo=qr_link, caption=qr_text, parse_mode="Markdown")
+                        qr_link, qr_text = get_deposit_info(uid)
+        return await user_reply.reply_photo(photo=qr_link, caption=qr_text, parse_mode="Markdown")
         
     if txt == "🎮 Danh sách game":
         kb = InlineKeyboardMarkup([
