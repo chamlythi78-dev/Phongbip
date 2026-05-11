@@ -1437,7 +1437,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await history_pro(update, ctx)
 
     if txt == "📞 Hỗ trợ":
-        return await user_reply.reply_text("📩 Gửi nội dung cần hỗ trợ ngay tại đây, Admin sẽ phản hồi sớm! hỗ trợ nhanh @RoGarden")
+        return await user_reply.reply_text("HỖ TRỢ NHANH @RoGarden")
+
 
     if len(parts) == 2 and parts[1].isdigit():
         code, amt = parts[0].upper(), int(parts[1])
