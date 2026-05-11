@@ -1822,14 +1822,25 @@ print("BOT ĐÃ SẴN SÀNG VỚI ID GAME CHUẨN VÀ TÍNH NĂNG MỚI!")
 
 # Khởi động bot
 async def main():
-    await app.initialize()
+    await application.initialize()
     # Khởi động game cho từng nhóm
     for gid in GROUP_IDS:
         asyncio.create_task(run_dice_game_cycle(app.bot, gid, gid))
         print(f"✅ Đã khởi động game cho nhóm {gid}")
-        if __name__ == "__main__":
+
+    print("--- BOT ĐANG CHẠY ---")
+    # Sử dụng run_polling để duy trì bot
+    await application.updater.start_polling(drop_pending_updates=True)
+    await application.start()
+    # Giữ cho chương trình không bị kết thúc
+    while True:
+        await asyncio.sleep(3600)
+
+if __name__ == "__main__":
     try:
-        print("--- BOT ĐANG CHẠY ---")
-        application.run_polling(drop_pending_updates=True)
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        pass
     except Exception as e:
-        print(f"Lỗi: {e}")
+        print(f"Lỗi khởi động: {e}")
+
