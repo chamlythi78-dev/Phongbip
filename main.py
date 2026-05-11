@@ -1141,15 +1141,14 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "👇 **Tham gia ngay tại đây:**"
         )
         return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True)
-
-    if txt == "💳 Nạp tiền":
+            if txt == "💳 Nạp tiền":
         if is_feature_banned(uid, 'nap'):
             return await user_reply.reply_text("❌ Tính năng NẠP TIỀN của bạn đã bị khóa. Vui lòng liên hệ Admin!")
-        if check_mt('mt_nap') and uid not in ADMIN_IDS:
+        if check_nt('mt_nap') and uid not in ADMIN_IDS:
             return await user_reply.reply_text("⚙️ Hệ thống Nạp Tiền đang bảo trì!")
-                        qr_link, qr_text = get_deposit_info(uid)
+        qr_link, qr_text = get_deposit_info(uid)    
         return await user_reply.reply_photo(photo=qr_link, caption=qr_text, parse_mode="Markdown")
-        
+
     if txt == "🎮 Danh sách game":
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎲 TÀI XỈU 3D", callback_data="menu_tx"), InlineKeyboardButton("💿 XÓC ĐĨA", callback_data="menu_xocdia")],
