@@ -193,9 +193,6 @@ async def place_bet_in_group(bot, user_id: int, group_id: int, choice: str, amou
     if balance < amount:
         return False, f"❌ Số dư không đủ! Bạn cần `{amount:,}đ` nhưng chỉ có `{balance:,}đ`."
 
-    if amount not in DEFAULT_BET_AMOUNTS:
-        return False, f"❌ Mức cược không hợp lệ! Vui lòng chọn: {', '.join([str(a) for a in DEFAULT_BET_AMOUNTS])}đ"
-
     if user_id in game["bets"]:
         return False, "❌ Bạn đã đặt cược trong ván này rồi! Hãy chờ ván tiếp theo."
 
