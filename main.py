@@ -341,7 +341,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 ADMIN_IDS = [8619503816,5260138362,6886009942]
 BOT_USERNAME = "zen88uytins1bot" 
-MIN_WITHDRAW = 200000 
+MIN_WITHDRAW = 50000 
 LOG_GROUP_ID = -1003663678808
 
 # THÔNG TIN NẠP TIỀN
@@ -2020,8 +2020,8 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "• Mỗi tài khoản chỉ nhận được 1 lần\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📞 **CSKH1:** @sakuri0\n"
-            "📞 **CSKH2:** @sakuri0\n"
-            "📞 **CSKH3:** @sakuri0\n"
+            "📞 **CSKH2:** @RoGarden \n"
+            "📞 **CSKH3:** @tomm2710\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
             "💡 Sau khi nhận CODE, dùng lệnh: `/code [MÃ_CODE]`"
         )
@@ -2113,7 +2113,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if txt == "📞 HỖ TRỢ CSKH2":
         msg = (
             "📞 **HỖ TRỢ KHÁCH HÀNG 2**\n\n"
-            "👤 **CSKH2:** @sakuri0\n"
+            "👤 **CSKH2:** @RoGarden\n"
             "💬 Phản hồi trong giờ hành chính!\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📌 **Các vấn đề có thể liên hệ:**\n"
@@ -2123,13 +2123,13 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "• Nhận CODE tân thủ\n"
             "• Nhận khuyến mãi nạp"
         )
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 NHẮN CSKH2", url="https://t.me/sakuri0")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 NHẮN CSKH2", url="https://t.me/RoGarden ")]])
         return await user_reply.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
     
     if txt == "📞 HỖ TRỢ CSKH3":
         msg = (
             "📞 **HỖ TRỢ KHÁCH HÀNG 3**\n\n"
-            "👤 **CSKH3:** @sakuri0\n"
+            "👤 **CSKH3:** @tomm2710\n"
             "💬 Phản hồi trong giờ hành chính!\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📌 **Các vấn đề có thể liên hệ:**\n"
@@ -2139,7 +2139,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "• Nhận CODE tân thủ\n"
             "• Nhận khuyến mãi nạp"
         )
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 NHẮN CSKH3", url="https://t.me/sakuri0")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 NHẮN CSKH3", url="https://t.me/tomm2710 ")]])
         return await user_reply.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
 
     if len(parts) == 2 and parts[1].isdigit():
