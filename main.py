@@ -17,7 +17,7 @@ DEFAULT_CYCLE_TIME = 60  # 60 giây cho 1 chu kỳ
 DEFAULT_REMINDER_INTERVALS = [60, 40, 20, 10, 5, 4, 3, 2, 1]  # Các mốc thời gian nhắc
 
 async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
-    """Chạy một chu kỳ game trong nhóm"""
+    """Chạy một chu kỳ game trong nhóm - ĐÃ SỬA: TUNG XÚC SẮC THẬT BẰNG TELEGRAM DICE"""
     while True:
         try:
             # Khởi tạo trạng thái game mới
@@ -82,38 +82,43 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
 
             # 3. Kết thúc đặt cược - Chuyển sang trạng thái tung xúc sắc
             game_state["status"] = "rolling"
+            
+            # Lưu số người chơi và tổng cược để hiển thị
+            player_count = len(game_state['bets'])
+            total_bet_before = sum(b["amount"] for b in game_state['bets'].values())
+            
             await bot.edit_message_text(
                 f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
                 f"🔒 **ĐÃ KHÓA CƯỢC!**\n"
+                f"👥 Số người chơi: `{player_count}`\n"
+                f"💰 Tổng cược: `{total_bet_before:,}đ`\n\n"
                 f"🎲 Đang tung xúc sắc...",
                 chat_id=chat_id,
                 message_id=game_state["message_id"],
                 parse_mode="Markdown"
             )
 
-            # 4. Tung 3 xúc sắc
             await asyncio.sleep(2)
-            dice1 = random.randint(1, 6)
-            dice2 = random.randint(1, 6)
-            dice3 = random.randint(1, 6)
+
+            # ===== 4. TUNG XÚC SẮC THẬT BẰNG TELEGRAM DICE =====
+            # Gửi 3 viên xúc sắc và lấy kết quả thật
+            dice1_msg = await bot.send_dice(chat_id, emoji="🎲")
+            dice2_msg = await bot.send_dice(chat_id, emoji="🎲")
+            dice3_msg = await bot.send_dice(chat_id, emoji="🎲")
+            
+            # Đợi animation kết thúc (khoảng 4 giây)
+            await asyncio.sleep(4)
+            
+            # Lấy kết quả thật từ dice
+            dice1 = dice1_msg.dice.value
+            dice2 = dice2_msg.dice.value
+            dice3 = dice3_msg.dice.value
             total = dice1 + dice2 + dice3
             result = "tai" if total >= 11 else "xiu"
             result_text = "TÀI" if result == "tai" else "XỈU"
 
-            # Hiệu ứng tung xúc sắc
-            for i in range(3):
-                try:
-                    await bot.edit_message_text(
-                        f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
-                        f"🎲 Đang lắc... {'.' * (i+1)}\n"
-                        f"⚡ {len(game_state['bets'])} người đã đặt cược.",
-                        chat_id=chat_id,
-                        message_id=game_state["message_id"],
-                        parse_mode="Markdown"
-                    )
-                except Exception:
-                    pass
-                await asyncio.sleep(0.8)
+            print(f"🎲 Kết quả thật: {dice1}-{dice2}-{dice3} = {total} ({result_text})")
+            print(f"👥 Số cược trong game: {len(game_state['bets'])}")
 
             # 5. Tính toán kết quả và cập nhật tiền
             winners = []
@@ -174,6 +179,8 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
 
         except Exception as e:
             print(f"❌ Lỗi trong chu kỳ game của nhóm {group_id}: {e}")
+            import traceback
+            traceback.print_exc()
             await asyncio.sleep(10)
 
 async def place_bet_in_group(bot, user_id: int, group_id: int, choice: str, amount: int, username: str = ""):
@@ -1369,7 +1376,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             await msg_vq.edit_text("💀 **MẤT LƯỢT!**\nChúc bạn may mắn lần sau.", parse_mode="Markdown")
 
-    # Các game khác giữ nguyên (Bầu Cua, Quay Số, Đua Xe, Dò Mìn, Xóc Đĩa, Penalty, Tài Xỉu, Gõ Mõ)
+    # ===== GAME BẦU CUA =====
     elif d == "menu_bc":
         if is_game_banned(uid, 8):
             return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
@@ -1421,6 +1428,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg_bc.edit_text(f"📊 **KẾT QUẢ BẦU CUA**\n━━━━━━━━━━━━━━━━━━━━━\n✨ Kết quả: **{res_str}**\n👉 Bạn chọn: **{items[choice_idx]}**\n━━━━━━━━━━━━━━━━━━━━━\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
         return
 
+    # ===== GAME QUAY SỐ =====
     elif d == "menu_qs":
         if is_game_banned(uid, 7):
             return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
@@ -1464,6 +1472,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg_qs.edit_text(f"📊 **KẾT QUẢ QUAY SỐ**\n━━━━━━━━━━━━━━━━━━━━━\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
         return
 
+    # ===== GAME ĐUA XE =====
     elif d == "menu_race":
         if is_game_banned(uid, 3):
             return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
@@ -1493,6 +1502,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.delete_message()
         await play_car_race(update, ctx, choice, amt)
 
+    # ===== GAME DÒ MÌN =====
     elif d == "menu_mines":
         if is_game_banned(uid, 4):
             return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
@@ -1555,6 +1565,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if f"mine_{uid}" in ctx.user_data: del ctx.user_data[f"mine_{uid}"]
         await q.edit_message_text(f"🎉 **CHÚC MỪNG!**\nBạn đã chốt lời thành công: `+{amt:,}đ`\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
 
+    # ===== GAME TÀI XỈU, PENALTY, XÓC ĐĨA =====
     elif d == "menu_tx" or d == "menu_ball" or d == "menu_xocdia":
         if "tx" in d: g_type, g_name, mt_key, gid = "tx", "🎲 TÀI XỈU 3D", "mt_taixiu", 1
         elif "ball" in d: g_type, g_name, mt_key, gid = "ball", "⚽️ BÓNG ĐÁ PENALTY", "mt_penalty", 5
@@ -1671,6 +1682,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             res_str = "-".join(map(str, results))
             await msg_status.edit_text(f"📊 **KẾT QUẢ TÀI XỈU**\n━━━━━━━━━━━━━━━━━━━━━\n🎲 Xúc xắc: **{res_str}**\n🏆 Tổng điểm: **{total}** ({res_type.upper()})\n━━━━━━━━━━━━━━━━━━━━━\n{status}\n💰 Số dư: `{get_balance(uid):,}đ`", parse_mode="Markdown")
 
+    # ===== GAME GÕ MÕ =====
     elif d == "menu_wooden":
         if is_game_banned(uid, 6):
             return await ctx.bot.send_message(uid, "❌ Bạn đã bị cấm chơi trò chơi này. Vui lòng liên hệ Admin!")
@@ -1815,15 +1827,14 @@ application.add_handler(CallbackQueryHandler(handle_callback))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_handler))
 
 # ===== KHỞI ĐỘNG GAME CHO NHÓM =====
-# 🚩 THAY THẾ BẰNG ID NHÓM CỦA BẠN (lấy từ @userinfobot)
-GROUP_IDS = [-1003663678808] 
+GROUP_IDS = [-1003663678808]  # ID nhóm của bạn
 
 async def main():
-    # 1. Khởi tạo bot
+    # Khởi tạo bot
     await application.initialize()
     await application.start()
 
-    # 2. Khởi động game cho từng nhóm (Tài Xỉu)
+    # Khởi động game cho từng nhóm
     for gid in GROUP_IDS:
         try:
             asyncio.create_task(run_dice_game_cycle(application.bot, gid, gid))
@@ -1831,17 +1842,17 @@ async def main():
         except Exception as e:
             print(f"Lỗi nhóm {gid}: {e}")
 
-    # 3. Bắt đầu nhận tin nhắn
+    # Bắt đầu nhận tin nhắn
     await application.updater.start_polling(drop_pending_updates=True)
-    print("--- BOT ĐÃ ONLINE VÀ ĐANG ĐỢI LỆNH ---")
+    print("🤖 BOT ĐÃ ONLINE VÀ ĐANG CHẠY...")
     
-    # 4. QUAN TRỌNG: Giữ cho script luôn chạy, không bị "Completed"
+    # Giữ bot chạy
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        pass
+        print("🛑 Bot đã dừng lại.")
     except Exception as e:
-        print(f"Lỗi khởi động: {e}")
+        print(f"❌ Lỗi khởi động: {e}") 
