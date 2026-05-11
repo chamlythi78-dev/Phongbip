@@ -16,6 +16,40 @@ DEFAULT_BET_AMOUNTS = [1000, 5000, 10000, 50000, 100000, 500000]
 DEFAULT_CYCLE_TIME = 60  # 60 giây cho 1 chu kỳ
 DEFAULT_REMINDER_INTERVALS = [60, 40, 20, 10, 5, 4, 3, 2, 1]  # Các mốc thời gian nhắc
 
+# ===== HÀM KIỂM TRA BẢO TRÌ HỆ THỐNG VÀ ADMIN BỊ CẤM =====
+def is_system_maintenance():
+    """Kiểm tra xem hệ thống có đang bảo trì không"""
+    res = query("SELECT value FROM settings WHERE key='system_maintenance'")
+    return res[0][0] == '1' if res else False
+
+def is_admin_banned(admin_id):
+    """Kiểm tra admin có bị cấm sử dụng lệnh không"""
+    res = query("SELECT 1 FROM banned_admins WHERE admin_id=%s", (admin_id,))
+    return len(res) > 0 if res else False
+
+# Decorator kiểm tra quyền admin và bảo trì
+def admin_only(func):
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user_id = update.effective_user.id
+        
+        # Kiểm tra bảo trì hệ thống
+        if is_system_maintenance() and user_id not in ADMIN_IDS:
+            await update.message.reply_text("🔧 **HỆ THỐNG ĐANG BẢO TRÌ**\n\nVui lòng quay lại sau ít phút!\nCảm ơn bạn đã thông cảm.", parse_mode="Markdown")
+            return
+        
+        # Kiểm tra nếu là admin bị cấm
+        if user_id in ADMIN_IDS and is_admin_banned(user_id):
+            await update.message.reply_text("❌ Bạn đã bị cấm sử dụng các lệnh Admin!\nVui lòng liên hệ Admin cấp cao hơn.", parse_mode="Markdown")
+            return
+        
+        # Kiểm tra nếu không phải admin
+        if user_id not in ADMIN_IDS:
+            await update.message.reply_text("❌ Bạn không có quyền sử dụng lệnh này!")
+            return
+        
+        return await func(update, ctx, *args, **kwargs)
+    return wrapper
+
 async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
     """Chạy một chu kỳ game trong nhóm - ĐÃ SỬA: TUNG XÚC SẮC THẬT BẰNG TELEGRAM DICE"""
     while True:
@@ -30,7 +64,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
             group_games[group_id] = game_state
 
             # 1. Gửi tin nhắn mở cược
-            bet_options_text = "\n".join([f"• {amount:,}đ - /t {amount} hoặc /x {amount}" for amount in DEFAULT_BET_AMOUNTS])
+            bet_options_text = "\n".join([f"• {amount:,}đ - t {amount} hoặc x {amount}" for amount in DEFAULT_BET_AMOUNTS])
             start_msg = await bot.send_message(
                 chat_id,
                 f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
@@ -290,6 +324,9 @@ query("CREATE TABLE IF NOT EXISTS game_rates (id INTEGER PRIMARY KEY, name TEXT,
 query("CREATE TABLE IF NOT EXISTS banned_games (user_id BIGINT, game_id INTEGER, PRIMARY KEY (user_id, game_id))")
 query("CREATE TABLE IF NOT EXISTS banned_features (user_id BIGINT, feature TEXT, PRIMARY KEY (user_id, feature))")
 
+# Thêm bảng lưu admin bị cấm
+query("CREATE TABLE IF NOT EXISTS banned_admins (admin_id BIGINT PRIMARY KEY, banned_by BIGINT, reason TEXT, banned_at TEXT)")
+
 # Sửa lại danh sách game chuẩn ID 1-10
 default_game_names = [
     "TÀI XỈU", "XÓC ĐĨA", "ĐUA XE", "DÒ MÌN", 
@@ -325,6 +362,11 @@ for k in maintenance_keys:
 res_name = query("SELECT 1 FROM settings WHERE key='bot_display_name'")
 if not res_name:
     query("INSERT INTO settings VALUES('bot_display_name', 'Hệ thống Game Uy Tín')")
+
+# Thêm setting bảo trì toàn hệ thống
+res_system_mt = query("SELECT 1 FROM settings WHERE key='system_maintenance'")
+if not res_system_mt:
+    query("INSERT INTO settings VALUES('system_maintenance', '0')")
 
 # ===== HÀM KIỂM SOÁT TỈ LỆ =====
 def get_rate_by_id(game_id, user_id=None):
@@ -409,8 +451,8 @@ def sub_money(uid, amt, note="withdraw"):
     return True
 
 # ===== ADMIN COMMANDS =====
+@admin_only
 async def dashboard_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     today = datetime.now().strftime("%d/%m/%Y")
     this_month = datetime.now().strftime("/%m/%Y")
     
@@ -444,8 +486,8 @@ async def bao_hiem_vip(context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(u_id, f"🛡 **BẢO HIỂM VIP**\n\nHôm qua bạn đã chưa may mắn. Hệ thống hoàn lại `{percent}%` tiền thua cược: `+{hoan_tien:,}đ`.")
                 except: pass
 
+@admin_only
 async def tong_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     t_nap = query("SELECT SUM(amount) FROM history WHERE amount > 0 AND note ILIKE '%nạp%'")[0][0] or 0
     t_rut = query("SELECT SUM(amount) FROM history WHERE amount < 0 AND note ILIKE '%Rút%'")[0][0] or 0
     t_cuoc = query("SELECT SUM(amount) FROM history WHERE amount < 0 AND note NOT ILIKE '%Rút%' AND note NOT ILIKE '%trừ tiền%'")[0][0] or 0
@@ -459,8 +501,8 @@ async def tong_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
            f"━━━━━━━━━━━━━━━━━━━━━")
     await update.message.reply_text(msg, parse_mode="Markdown")
 
+@admin_only
 async def cam_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     if len(ctx.args) < 2: return await update.message.reply_text("❌ Cú pháp: `/cam [id] [game_id/nap/rut]`")
     uid, target = int(ctx.args[0]), ctx.args[1]
     if target.isdigit():
@@ -470,8 +512,8 @@ async def cam_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         query("INSERT INTO banned_features VALUES(%s, %s) ON CONFLICT DO NOTHING", (uid, target))
         await update.message.reply_text(f"🚫 Đã cấm ID `{uid}` sử dụng tính năng `{target}`")
 
+@admin_only
 async def bocam_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     if len(ctx.args) < 2: return await update.message.reply_text("❌ Cú pháp: `/bocam [id] [game_id/nap/rut]`")
     uid, target = int(ctx.args[0]), ctx.args[1]
     if target.isdigit():
@@ -508,20 +550,20 @@ async def top_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         text += f"{medal} ID: `{u[0]}` — `{u[1]:,}đ`\n"
     await update.message.reply_text(text, parse_mode="Markdown")
 
+@admin_only
 async def set_bot_name_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     if not ctx.args: return await update.message.reply_text("❌ Cú pháp: `/setname [Tên mới]`")
     new_name = " ".join(ctx.args)
     query("UPDATE settings SET value=%s WHERE key='bot_display_name'", (new_name,))
     await update.message.reply_text(f"✅ Đã đổi tên hiển thị của Bot thành: **{new_name}**", parse_mode="Markdown")
 
+@admin_only
 async def resetsdall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     query("UPDATE users SET balance = 0")
     await update.message.reply_text("✅ Đã xóa toàn bộ số dư của tất cả người dùng về 0!")
 
+@admin_only
 async def tileall_set_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     if not ctx.args:
         return await update.message.reply_text("❌ Cú pháp: `/tileall [số]`")
     try:
@@ -531,8 +573,8 @@ async def tileall_set_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Tỉ lệ phải là số nguyên.")
 
+@admin_only
 async def tile1_user_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     if len(ctx.args) < 2:
         return await update.message.reply_text("❌ Cú pháp: `/tile1 [ID] [Tỉ_lệ]`\nVD: `/tile1 123456 10` (Chỉnh ID 123456 thắng 10%)")
     try:
@@ -543,8 +585,8 @@ async def tile1_user_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Lỗi dữ liệu nhập vào.")
 
+@admin_only
 async def soduall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     users = query("SELECT user_id, balance FROM users WHERE balance > 0 ORDER BY balance DESC")
     if not users:
         return await update.message.reply_text("Hiện không có ai có số dư lớn hơn 0.")
@@ -557,21 +599,21 @@ async def soduall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(text, parse_mode="Markdown")
 
+@admin_only
 async def tileall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     rates = query("SELECT id, name, rate FROM game_rates ORDER BY id ASC")
     text = "📊 **TỈ LỆ THẮNG TẤT CẢ GAME:**\n\n"
     for r in rates:
         text += f"🆔 `{r[0]}` | {r[1]}: `{r[2]}%` thắng\n"
     await update.message.reply_text(text, parse_mode="Markdown")
 
+@admin_only
 async def xoalsall_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     query("DELETE FROM history")
     await update.message.reply_text("✅ Đã xoá toàn bộ lịch sử cược, nạp và rút của hệ thống!")
 
+@admin_only
 async def xoals_user_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     if not ctx.args:
         return await update.message.reply_text("❌ Cú pháp: `/xoals [ID]`")
     try:
@@ -580,6 +622,197 @@ async def xoals_user_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Đã xoá sạch lịch sử của người dùng: `{uid}`", parse_mode="Markdown")
     except:
         await update.message.reply_text("❌ ID không hợp lệ.")
+
+# ===== QUẢN LÝ ADMIN =====
+async def cam_admin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Cấm admin khác sử dụng lệnh - /camadmin [id] [lý do]"""
+    user_id = update.effective_user.id
+    
+    # Chỉ admin đầu tiên (8619503816) mới có quyền cấm admin khác
+    if user_id != 8619503816:
+        await update.message.reply_text("❌ Chỉ Admin chính (ID: 8619503816) mới có quyền sử dụng lệnh này!")
+        return
+    
+    if len(ctx.args) < 1:
+        await update.message.reply_text("❌ Cú pháp: `/camadmin [ID_admin] [lý do]`\nVD: `/camadmin 5260138362 Lạm dụng quyền hạn`", parse_mode="Markdown")
+        return
+    
+    try:
+        target_admin = int(ctx.args[0])
+        reason = " ".join(ctx.args[1:]) if len(ctx.args) > 1 else "Không có lý do"
+        
+        if target_admin == user_id:
+            await update.message.reply_text("❌ Bạn không thể tự cấm chính mình!")
+            return
+        
+        if target_admin not in ADMIN_IDS:
+            await update.message.reply_text(f"❌ ID `{target_admin}` không phải là Admin của bot!", parse_mode="Markdown")
+            return
+        
+        now_str = datetime.now().strftime("%H:%M - %d/%m/%Y")
+        query("INSERT INTO banned_admins VALUES(%s, %s, %s, %s) ON CONFLICT (admin_id) DO UPDATE SET banned_by=%s, reason=%s, banned_at=%s", 
+              (target_admin, user_id, reason, now_str, user_id, reason, now_str))
+        
+        await update.message.reply_text(
+            f"✅ **ĐÃ CẤM ADMIN**\n\n"
+            f"👤 ID: `{target_admin}`\n"
+            f"📝 Lý do: {reason}\n"
+            f"⏰ Thời gian: {now_str}\n\n"
+            f"Admin này sẽ không thể sử dụng bất kỳ lệnh Admin nào!",
+            parse_mode="Markdown"
+        )
+        
+        # Gửi thông báo cho admin bị cấm
+        try:
+            await ctx.bot.send_message(
+                target_admin,
+                f"⚠️ **THÔNG BÁO**\n\n"
+                f"Bạn đã bị cấm sử dụng các lệnh Admin.\n"
+                f"📝 Lý do: {reason}\n"
+                f"🕐 Thời gian: {now_str}\n\n"
+                f"Liên hệ Admin chính để được gỡ cấm."
+            )
+        except:
+            pass
+            
+    except ValueError:
+        await update.message.reply_text("❌ ID không hợp lệ!")
+
+async def unban_admin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Gỡ cấm admin - /unbanadmin [id]"""
+    user_id = update.effective_user.id
+    
+    if user_id != 8619503816:
+        await update.message.reply_text("❌ Chỉ Admin chính (ID: 8619503816) mới có quyền sử dụng lệnh này!")
+        return
+    
+    if len(ctx.args) < 1:
+        await update.message.reply_text("❌ Cú pháp: `/unbanadmin [ID_admin]`", parse_mode="Markdown")
+        return
+    
+    try:
+        target_admin = int(ctx.args[0])
+        
+        if not is_admin_banned(target_admin):
+            await update.message.reply_text(f"❌ Admin `{target_admin}` không bị cấm!", parse_mode="Markdown")
+            return
+        
+        query("DELETE FROM banned_admins WHERE admin_id=%s", (target_admin,))
+        await update.message.reply_text(f"✅ Đã gỡ cấm cho Admin `{target_admin}`", parse_mode="Markdown")
+        
+        try:
+            await ctx.bot.send_message(target_admin, "✅ Bạn đã được gỡ cấm và có thể sử dụng lại các lệnh Admin!")
+        except:
+            pass
+            
+    except ValueError:
+        await update.message.reply_text("❌ ID không hợp lệ!")
+
+async def list_banned_admins_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Danh sách admin bị cấm - /listbannedadmins"""
+    user_id = update.effective_user.id
+    
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Bạn không có quyền sử dụng lệnh này!")
+        return
+    
+    banned_list = query("SELECT admin_id, banned_by, reason, banned_at FROM banned_admins")
+    
+    if not banned_list:
+        await update.message.reply_text("📋 Hiện không có Admin nào bị cấm.", parse_mode="Markdown")
+        return
+    
+    msg = "🚫 **DANH SÁCH ADMIN BỊ CẤM**\n━━━━━━━━━━━━━━━━━━━━━\n"
+    for admin_id, banned_by, reason, banned_at in banned_list:
+        msg += f"\n👤 ID: `{admin_id}`\n"
+        msg += f"👮 Bởi: `{banned_by}`\n"
+        msg += f"📝 Lý do: {reason}\n"
+        msg += f"⏰ Lúc: {banned_at}\n"
+        msg += "━━━━━━━━━━━━━━━━━━━━━\n"
+    
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+# ===== BẢO TRÌ TOÀN HỆ THỐNG =====
+async def baotri_hethong_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Bảo trì toàn bộ bot - /baotrihethong [on/off]"""
+    user_id = update.effective_user.id
+    
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Bạn không có quyền sử dụng lệnh này!")
+        return
+    
+    if len(ctx.args) < 1:
+        current_status = "🔴 ĐANG BẢO TRÌ" if is_system_maintenance() else "🟢 HOẠT ĐỘNG"
+        await update.message.reply_text(
+            f"🛠 **TRẠNG THÁI HỆ THỐNG**\n\n"
+            f"📊 Hiện tại: {current_status}\n\n"
+            f"📝 Cú pháp:\n"
+            f"• Bật bảo trì: `/baotrihethong on`\n"
+            f"• Tắt bảo trì: `/baotrihethong off`",
+            parse_mode="Markdown"
+        )
+        return
+    
+    action = ctx.args[0].lower()
+    
+    if action == "on":
+        query("UPDATE settings SET value='1' WHERE key='system_maintenance'")
+        
+        # Gửi thông báo cho tất cả người dùng
+        users = query("SELECT user_id FROM users")
+        sent_count = 0
+        for user in users:
+            try:
+                await ctx.bot.send_message(
+                    user[0],
+                    "🔧 **THÔNG BÁO BẢO TRÌ**\n\n"
+                    "Hệ thống đang được nâng cấp và bảo trì.\n"
+                    "Bot sẽ tạm thời ngừng hoạt động.\n\n"
+                    "⏰ Vui lòng quay lại sau ít phút!\n"
+                    "Cảm ơn bạn đã thông cảm.",
+                    parse_mode="Markdown"
+                )
+                sent_count += 1
+                await asyncio.sleep(0.5)
+            except:
+                pass
+        
+        await update.message.reply_text(
+            f"🔧 **ĐÃ BẬT BẢO TRÌ TOÀN HỆ THỐNG**\n\n"
+            f"✅ Đã gửi thông báo đến {sent_count} người dùng.\n"
+            f"⚠️ Bot sẽ từ chối mọi yêu cầu cho đến khi tắt bảo trì.",
+            parse_mode="Markdown"
+        )
+        
+    elif action == "off":
+        query("UPDATE settings SET value='0' WHERE key='system_maintenance'")
+        
+        # Gửi thông báo cho tất cả người dùng
+        users = query("SELECT user_id FROM users")
+        sent_count = 0
+        for user in users:
+            try:
+                await ctx.bot.send_message(
+                    user[0],
+                    "✅ **HỆ THỐNG ĐÃ TRỞ LẠI**\n\n"
+                    "Quá trình bảo trì đã hoàn tất!\n"
+                    "Bot đã sẵn sàng hoạt động trở lại.\n\n"
+                    "🎮 Chúc bạn chơi game vui vẻ!",
+                    parse_mode="Markdown"
+                )
+                sent_count += 1
+                await asyncio.sleep(0.5)
+            except:
+                pass
+        
+        await update.message.reply_text(
+            f"✅ **ĐÃ TẮT BẢO TRÌ TOÀN HỆ THỐNG**\n\n"
+            f"✅ Đã gửi thông báo đến {sent_count} người dùng.\n"
+            f"🎮 Bot đã hoạt động trở lại.",
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text("❌ Sai cú pháp! Dùng `on` hoặc `off`", parse_mode="Markdown")
 
 # ===== LOGIC GAMES ANIMATION =====
 async def play_car_race(update: Update, ctx: ContextTypes.DEFAULT_TYPE, choice, amt):
@@ -668,8 +901,8 @@ async def nhap_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query("UPDATE codes SET uses=uses-1 WHERE code=%s", (code_str,))
     await update.message.reply_text(f"🎉 **NHẬN QUÀ THÀNH CÔNG!**\n\n💰 Bạn nhận được: `+{reward:,}đ`", parse_mode="Markdown")
 
+@admin_only
 async def tilewin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         game_id = int(ctx.args[0])
         new_rate = int(ctx.args[1])
@@ -695,8 +928,8 @@ async def tilewin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text(msg, parse_mode="Markdown")
 
+@admin_only
 async def baotri_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     def st(k): return "🔴 OFF" if check_mt(k) else "🟢 ON"
     kb = [
         [InlineKeyboardButton(f"🎲 Tài Xỉu 3D: {st('mt_taixiu')}", callback_data="tg_mt_taixiu")],
@@ -716,8 +949,8 @@ async def baotri_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🛠 **BẢNG QUẢN LÝ BẢO TRÌ**\n(Bấm để chuyển trạng thái On/Off)", 
                                    reply_markup=InlineKeyboardMarkup(kb))
 
+@admin_only
 async def nap_tien_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         target_id = int(ctx.args[0])
         amount = int(ctx.args[1])
@@ -740,8 +973,8 @@ async def nap_tien_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Cú pháp: `/nap [ID] [Số tiền]`")
 
+@admin_only
 async def reset_all_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ XÁC NHẬN XÓA TẤT CẢ", callback_data="confirm_reset_all_final")],
         [InlineKeyboardButton("❌ HỦY THAO TÁC", callback_data="close_admin")]
@@ -752,8 +985,8 @@ async def reset_all_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "Mọi thông tin số dư và lịch sử sẽ biến mất vĩnh viễn.\n\n"
         "Bạn có chắc chắn muốn thực hiện?", reply_markup=kb, parse_mode="Markdown")
 
+@admin_only
 async def reset_bank(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         target_id = int(ctx.args[0])
         query("UPDATE users SET bank=NULL, stk=NULL, name=NULL WHERE user_id=%s", (target_id,))
@@ -762,8 +995,8 @@ async def reset_bank(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Cú pháp: `/resetbank [ID]`")
 
+@admin_only
 async def admin_info(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         target_id = int(ctx.args[0])
         res = query("SELECT balance, refs, bank, stk, name, last_checkin, total_bet FROM users WHERE user_id=%s", (target_id,))
@@ -786,8 +1019,8 @@ async def admin_info(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Cú pháp: `/info [ID]`")
 
+@admin_only
 async def tao_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         reward, uses = int(ctx.args[0]), int(ctx.args[1])
         code = gen_code()
@@ -796,46 +1029,46 @@ async def tao_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Cú pháp: `/taocode [số tiền] [lượt dùng]`")
 
+@admin_only
 async def add(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         uid, amt = int(ctx.args[0]), int(ctx.args[1])
         add_money(uid, amt, "Admin cộng tiền")
         await update.message.reply_text(f"✅ Đã cộng `{amt:,}đ` cho ID `{uid}`")
     except: pass
 
+@admin_only
 async def sub(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         uid, amt = int(ctx.args[0]), int(ctx.args[1])
         sub_money(uid, amt, "Admin trừ tiền")
         await update.message.reply_text(f"✅ Đã trừ `{amt:,}đ` của ID `{uid}`")
     except: pass
 
+@admin_only
 async def ban(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         uid = int(ctx.args[0])
         query("INSERT INTO banned(user_id) VALUES(%s) ON CONFLICT (user_id) DO NOTHING", (uid,))
         await update.message.reply_text(f"🚫 Đã chặn người dùng `{uid}`")
     except: pass
 
+@admin_only
 async def unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         uid = int(ctx.args[0])
         query("DELETE FROM banned WHERE user_id=%s", (uid,))
         await update.message.reply_text(f"✅ Đã bỏ chặn người dùng `{uid}`")
     except: pass
 
+@admin_only
 async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     res = query("SELECT COUNT(*) FROM users")
     total = res[0][0] if res else 0
     await update.message.reply_text(f"📊 **THỐNG KÊ:**\n\n👥 Tổng số người dùng: `{total}`", parse_mode="Markdown")
 
+@admin_only
 async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
-    if update.effective_user.id not in ADMIN_IDS: return
     limit = 20
     offset = page * limit
     users = query("SELECT user_id, balance FROM users ORDER BY user_id DESC LIMIT %s OFFSET %s", (limit, offset))
@@ -863,8 +1096,8 @@ async def all_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE, page=0):
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
+@admin_only
 async def history_all_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     data = query("SELECT * FROM history ORDER BY time DESC LIMIT 50") 
     msg = "🌐 **LỊCH SỬ TOÀN HỆ THỐNG:**\n\n"
     if data:
@@ -876,8 +1109,8 @@ async def history_all_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(msg or "Trống", parse_mode="Markdown")
 
+@admin_only
 async def broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     if not ctx.args:
         return await update.message.reply_text("❌ Cú pháp: `/send [nội dung]`")
     msg_to_send = " ".join(ctx.args)
@@ -892,8 +1125,8 @@ async def broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         except: failed += 1
     await status_msg.edit_text(f"✅ **HOÀN THÀNH**\n\n📊 Thành công: `{sent}`\n❌ Thất bại: `{failed}`")
 
+@admin_only
 async def reply_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         uid = int(ctx.args[0])
         msg_reply = " ".join(ctx.args[1:])
@@ -902,8 +1135,8 @@ async def reply_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Cú pháp: `/rep [ID] [Nội dung]`")
 
+@admin_only
 async def check_user_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
     try:
         uid = int(ctx.args[0])
         data = query("SELECT amount, note, time FROM history WHERE user_id=%s ORDER BY time DESC", (uid,))
@@ -936,7 +1169,7 @@ async def bet_tai_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
         await update.message.reply_text(
             f"❌ Vui lòng nhập số tiền cược!\n"
-            f"Cú pháp: `/t [số_tiền]`\n"
+            f"Cú pháp: `t [số_tiền]`\n"
             f"Các mức cược hợp lệ: {', '.join([str(a) for a in DEFAULT_BET_AMOUNTS])}đ",
             parse_mode="Markdown"
         )
@@ -963,7 +1196,7 @@ async def bet_xiu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
         await update.message.reply_text(
             f"❌ Vui lòng nhập số tiền cược!\n"
-            f"Cú pháp: `/x [số_tiền]`\n"
+            f"Cú pháp: `x [số_tiền]`\n"
             f"Các mức cược hợp lệ: {', '.join([str(a) for a in DEFAULT_BET_AMOUNTS])}đ",
             parse_mode="Markdown"
         )
@@ -984,7 +1217,7 @@ async def group_status_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     group_id = update.effective_chat.id
     status = get_group_game_status(group_id)
     if status == "betting":
-        await update.message.reply_text("🎲 **ĐANG MỞ CƯỢC!**\nHãy đặt cược ngay: `/t [tiền]` cho TÀI, `/x [tiền]` cho XỈU", parse_mode="Markdown")
+        await update.message.reply_text("🎲 **ĐANG MỞ CƯỢC!**\nHãy đặt cược ngay: `t [tiền]` cho TÀI, `x [tiền]` cho XỈU", parse_mode="Markdown")
     elif status == "rolling":
         await update.message.reply_text("🎲 **ĐANG TUNG XÚC SẮC!**\nVui lòng chờ kết quả...", parse_mode="Markdown")
     else:
@@ -994,6 +1227,12 @@ async def group_status_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if is_banned(uid): return
+    
+    # Kiểm tra bảo trì hệ thống
+    if is_system_maintenance() and uid not in ADMIN_IDS:
+        await update.message.reply_text("🔧 **HỆ THỐNG ĐANG BẢO TRÌ**\n\nVui lòng quay lại sau ít phút!", parse_mode="Markdown")
+        return
+    
     get_user(uid)
     if ctx.args:
         try:
@@ -1093,6 +1332,12 @@ async def history_pro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid, txt = update.effective_user.id, update.message.text
     if not txt or is_banned(uid): return
+    
+    # Kiểm tra bảo trì hệ thống
+    if is_system_maintenance() and uid not in ADMIN_IDS:
+        await update.message.reply_text("🔧 **HỆ THỐNG ĐANG BẢO TRÌ**\n\nVui lòng quay lại sau ít phút!", parse_mode="Markdown")
+        return
+    
     user_reply = update.message
     parts = txt.split()
 
@@ -1207,6 +1452,61 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             except: pass
         await user_reply.reply_text("✅ Đã gửi yêu cầu tới Admin!")
 
+# ===== XỬ LÝ TIN NHẮN NHÓM (LỆNH KHÔNG DẤU /) =====
+async def handle_group_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Xử lý tin nhắn trong nhóm để bắt lệnh không dấu / như 't 10000'"""
+    # Chỉ xử lý trong nhóm
+    if update.effective_chat.type == "private":
+        await main_handler(update, ctx)
+        return
+    
+    text = update.message.text
+    if not text:
+        return
+    
+    parts = text.strip().split()
+    if not parts:
+        return
+    
+    command = parts[0].lower()
+    
+    # Xử lý lệnh t (Tài)
+    if command == "t" and len(parts) >= 2:
+        try:
+            amount = int(parts[1])
+            # Tạo args giả lập
+            class FakeArgs:
+                def __init__(self, args_list):
+                    self.args = args_list
+            fake_ctx = type('obj', (object,), {
+                'bot': ctx.bot, 
+                'args': [str(amount)],
+                'user_data': ctx.user_data,
+                'chat_data': ctx.chat_data
+            })()
+            await bet_tai_group(update, fake_ctx)
+        except ValueError:
+            await update.message.reply_text("❌ Số tiền không hợp lệ!")
+        return
+    
+    # Xử lý lệnh x (Xỉu)
+    if command == "x" and len(parts) >= 2:
+        try:
+            amount = int(parts[1])
+            fake_ctx = type('obj', (object,), {
+                'bot': ctx.bot, 
+                'args': [str(amount)],
+                'user_data': ctx.user_data,
+                'chat_data': ctx.chat_data
+            })()
+            await bet_xiu_group(update, fake_ctx)
+        except ValueError:
+            await update.message.reply_text("❌ Số tiền không hợp lệ!")
+        return
+    
+    # Không phải lệnh t/x thì xử lý bình thường
+    await main_handler(update, ctx)
+
 # ===== CALLBACK HANDLER =====
 async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -1290,11 +1590,16 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     if d.startswith("tg_mt_"):
-        if uid not in ADMIN_IDS: return
+        if uid not in ADMIN_IDS:
+            await q.answer("Bạn không có quyền!")
+            return
         key = d.replace("tg_", "")
         new_val = "0" if check_mt(key) else "1"
         query("UPDATE settings SET value=%s WHERE key=%s", (new_val, key))
-        def st(k): return "🔴 OFF" if check_mt(k) else "🟢 ON"
+        await q.answer("✅ Đã cập nhật trạng thái!")
+        # Refresh lại menu
+        def st(k): 
+            return "🔴 OFF" if check_mt(k) else "🟢 ON"
         new_kb = [
             [InlineKeyboardButton(f"🎲 Tài Xỉu 3D: {st('mt_taixiu')}", callback_data="tg_mt_taixiu")],
             [InlineKeyboardButton(f"💿 Xóc Đĩa: {st('mt_xocdia')}", callback_data="tg_mt_xocdia")],
@@ -1310,8 +1615,10 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton(f"🛒 Rút Tiền: {st('mt_rut')}", callback_data="tg_mt_rut")],
             [InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")]
         ]
-        await q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(new_kb))
-        await q.answer("Đã cập nhật trạng thái!")
+        try:
+            await q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(new_kb))
+        except:
+            pass
         return
 
     if d == "close_admin":
@@ -1817,9 +2124,17 @@ application.add_handler(CommandHandler("tong", tong_cmd))
 application.add_handler(CommandHandler("cam", cam_cmd))
 application.add_handler(CommandHandler("bocam", bocam_cmd))
 
+# Handler quản lý admin mới
+application.add_handler(CommandHandler("camadmin", cam_admin_cmd))
+application.add_handler(CommandHandler("unbanadmin", unban_admin_cmd))
+application.add_handler(CommandHandler("listbannedadmins", list_banned_admins_cmd))
+
+# Handler bảo trì toàn hệ thống
+application.add_handler(CommandHandler("baotrihethong", baotri_hethong_cmd))
+
 # Handler mới cho game trong nhóm
-application.add_handler(CommandHandler("t", bet_tai_group))   # Lệnh /t [số_tiền] cho TÀI
-application.add_handler(CommandHandler("x", bet_xiu_group))   # Lệnh /x [số_tiền] cho XỈU
+application.add_handler(CommandHandler("t", bet_tai_group))
+application.add_handler(CommandHandler("x", bet_xiu_group))
 application.add_handler(CommandHandler("group_status", group_status_cmd))
 
 # Job tự động bảo hiểm VIP
@@ -1827,7 +2142,7 @@ if application.job_queue:
     application.job_queue.run_daily(bao_hiem_vip, time=datetime.strptime("00:00:01", "%H:%M:%S").time())
 
 application.add_handler(CallbackQueryHandler(handle_callback))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_handler))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_group_message))
 
 # ===== KHỞI ĐỘNG GAME CHO NHÓM =====
 GROUP_IDS = [-1003663678808]  # ID nhóm của bạn
