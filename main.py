@@ -304,9 +304,6 @@ async def place_bet_in_group(bot, user_id: int, group_id: int, choice: str, amou
     if balance < amount:
         return False, f"❌ Số dư không đủ! Bạn cần `{amount:,}đ` nhưng chỉ có `{balance:,}đ`."
 
-    if user_id in game["bets"]:
-        return False, "❌ Bạn đã đặt cược trong ván này rồi! Hãy chờ ván tiếp theo."
-
     # Trừ tiền ngay lập tức
     note = f"Cược {choice.upper()} nhóm - {amount:,}đ"
     if not sub_money(user_id, amount, note):
