@@ -332,15 +332,15 @@ def gen_code():
 TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-ADMIN_IDS = [8619503816,5260138362,6886009942]
+ADMIN_IDS = [8619503816,6886009942]
 BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 50000 
 LOG_GROUP_ID = -1003663678808
 
 # THÔNG TIN NẠP TIỀN
-BANK_ID = "MB"
-ACCOUNT_NO = "0003456712345"
-ACCOUNT_NAME = "LY THI CHAM"
+BANK_ID = "TECHCOMBANK"
+ACCOUNT_NO = "7980118386 "
+ACCOUNT_NAME = "LE TRUNG HIEU"
 
 def get_deposit_info(user_id):
     qr_url = f"https://img.vietqr.io/image/{BANK_ID}-{ACCOUNT_NO}-qr_only.png?amount=0&addInfo={user_id}&accountName={ACCOUNT_NAME}"
@@ -2209,17 +2209,24 @@ async def rut(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("✅ Duyệt", callback_data=f"ok_{uid}_{amount}"),
                 InlineKeyboardButton("❌ Từ chối", callback_data=f"no_{uid}_{amount}")
             ]])
+# Gửi yêu cầu rút cho TẤT CẢ admin
+for admin_id in ADMIN_IDS:
+    try:
+        await ctx.bot.send_message(
+            admin_id, 
+            f"🔔 **YÊU CẦU RÚT TIỀN**\n\n"
+            f"👤 ID: `{uid}`\n"
+            f"💰 `{amount:,}đ`\n"
+            f"🏛 `{bank} | {stk} | {name}`\n"
+            f"📅 `{now_str}`",
+            reply_markup=keyboard, 
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"Không thể gửi tin nhắn cho admin {admin_id}: {e}")
+
             
-            await ctx.bot.send_message(
-                ADMIN_IDS[0], 
-                f"🔔 **YÊU CẦU RÚT TIỀN**\n\n"
-                f"👤 ID: `{uid}`\n"
-                f"💰 `{amount:,}đ`\n"
-                f"🏛 `{bank} | {stk} | {name}`\n"
-                f"📅 `{now_str}`",
-                reply_markup=keyboard, 
-                parse_mode="Markdown"
-            )
+            
             await update.message.reply_text(
                 f"✅ **GỬI YÊU CẦU RÚT THÀNH CÔNG!**\n\n"
                 f"💰 Số tiền: `{amount:,}đ`\n"
