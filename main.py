@@ -31,6 +31,9 @@ DEFAULT_BET_AMOUNTS = [1000, 5000, 10000, 50000, 100000, 500000]
 DEFAULT_CYCLE_TIME = 60
 DEFAULT_REMINDER_INTERVALS = [60, 40, 20, 10, 5, 4, 3, 2, 1]
 
+# ===== BIẾN TOÀN CỤC =====
+_bot_instance = None
+
 # ===== HÀM KIỂM TRA BẢO TRÌ =====
 def is_system_maintenance():
     res = query("SELECT value FROM settings WHERE key='system_maintenance'")
@@ -381,6 +384,16 @@ CREATE TABLE IF NOT EXISTS daily_top_interactions (
 )
 """)
 
+# Bảng lưu code tân thủ
+query("""
+CREATE TABLE IF NOT EXISTS tanthu_code (
+    user_id BIGINT PRIMARY KEY,
+    code TEXT,
+    received_at TEXT,
+    used INTEGER DEFAULT 0
+)
+""")
+
 default_game_names = [
     "TÀI XỈU", "XÓC ĐĨA", "ĐUA XE", "DÒ MÌN", 
     "PENALTY", "GÕ MÕ", "QUAY SỐ", "BẦU CUA", "XỔ SỐ", "VÒNG QUAY MAY MẮN",
@@ -454,7 +467,10 @@ def check_win_by_id(game_id, user_id=None):
 
 def check_mt(key):
     res = query("SELECT value FROM settings WHERE key=%s", (key,))
-    return res[0][0] == '1' if res else False
+    if res:
+        return res[0][0] == '1'
+    query("INSERT INTO settings (key, value) VALUES (%s, '0') ON CONFLICT (key) DO NOTHING", (key,))
+    return False
 
 def get_bot_name():
     res = query("SELECT value FROM settings WHERE key='bot_display_name'")
@@ -516,6 +532,11 @@ def sub_money(uid, amt, note="withdraw"):
     query("INSERT INTO history VALUES(%s,%s,%s,%s)", (uid, -amt, note, now_str))
     if note != "Rút tiền" and note != "withdraw" and "Admin" not in note and "Chuyển tiền" not in note:
         query("UPDATE users SET total_bet=total_bet+%s WHERE user_id=%s", (amt, uid))
+        # Cập nhật tiến độ cược cho khuyến mãi
+        if _bot_instance:
+            update_bet_progress(uid, amt, _bot_instance)
+        else:
+            update_bet_progress(uid, amt, None)
     return True
 
 def check_bet_requirement(user_id, bet_amount=0):
@@ -538,6 +559,12 @@ def add_bonus_with_requirement(user_id, bonus_amount, required_multiplier=3):
     query("INSERT INTO user_bonus (user_id, bonus_amount, required_bet, current_bet, created_at) VALUES (%s, %s, %s, %s, %s)",
           (user_id, bonus_amount, required_bet, 0, now_str))
     add_money(user_id, bonus_amount, f"Khuyến mãi nạp +{bonus_amount:,}đ (yêu cầu cược x{required_multiplier})")
+    
+    # Gửi thông báo chi tiết cho người dùng
+    if _bot_instance:
+        import asyncio
+        asyncio.create_task(send_bonus_notification(user_id, bonus_amount, required_bet))
+    
     return required_bet
 
 def get_remaining_bet_required(user_id):
@@ -546,6 +573,141 @@ def get_remaining_bet_required(user_id):
         return 0
     required_bet, current_bet = bonus_data[0]
     return max(0, required_bet - current_bet)
+
+# ===== HÀM THEO DÕI TIẾN ĐỘ CƯỢC =====
+async def send_bonus_notification(user_id, bonus_amount, required_bet):
+    """Gửi thông báo khi nhận khuyến mãi"""
+    if _bot_instance:
+        message = (
+            f"🎁 **NHẬN KHUYẾN MÃI THÀNH CÔNG!** 🎁\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 **Tiền thưởng:** `+{bonus_amount:,}đ`\n"
+            f"🎯 **Yêu cầu cược:** `{required_bet:,}đ` (x3 vòng)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ **ĐIỀU KIỆN RÚT TIỀN:**\n"
+            f"• Bạn cần cược đủ **{required_bet:,}đ** mới có thể rút tiền\n"
+            f"• Mỗi lần cược sẽ được cập nhật tự động\n"
+            f"• Dùng lệnh `/checkprogress` để xem tiến độ\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎮 **Chúc bạn may mắn và hoàn thành sớm!**"
+        )
+        try:
+            await _bot_instance.send_message(user_id, message, parse_mode="Markdown")
+        except:
+            pass
+
+async def check_and_notify_bet_completion(user_id: int, current_bet: int, required_bet: int):
+    """Kiểm tra và gửi thông báo khi người dùng cược đủ yêu cầu"""
+    if current_bet >= required_bet:
+        bonus_data = query("SELECT bonus_amount, required_bet, current_bet FROM user_bonus WHERE user_id=%s", (user_id,))
+        if bonus_data:
+            bonus_amount, req_bet, curr_bet = bonus_data[0]
+            
+            message = (
+                f"🎉 **CHÚC MỪNG! BẠN ĐÃ HOÀN THÀNH YÊU CẦU CƯỢC!** 🎉\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💰 **Tiền khuyến mãi đã nhận:** `+{bonus_amount:,}đ`\n"
+                f"🎯 **Yêu cầu cược:** `{req_bet:,}đ` (x3 vòng)\n"
+                f"✅ **Tổng cược đã thực hiện:** `{curr_bet:,}đ`\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🔓 **Bạn đã có thể rút tiền bình thường!**\n\n"
+                f"💪 Cảm ơn bạn đã tin tưởng và sử dụng dịch vụ!\n"
+                f"🎮 Chúc bạn tiếp tục may mắn!"
+            )
+            try:
+                if _bot_instance:
+                    await _bot_instance.send_message(user_id, message, parse_mode="Markdown")
+                    
+                    # Gửi thông báo đến admin
+                    log_message = (
+                        f"✅ **HOÀN THÀNH YÊU CẦU CƯỢC**\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"👤 **User ID:** `{user_id}`\n"
+                        f"💰 **Tiền KM:** `+{bonus_amount:,}đ`\n"
+                        f"🎯 **Yêu cầu:** `{req_bet:,}đ`\n"
+                        f"✅ **Đã cược:** `{curr_bet:,}đ`\n"
+                        f"⏰ **Hoàn thành lúc:** {get_vietnam_datetime_db()}"
+                    )
+                    for admin_id in ADMIN_IDS:
+                        try:
+                            await _bot_instance.send_message(admin_id, log_message, parse_mode="Markdown")
+                        except:
+                            pass
+            except:
+                pass
+            
+            query("DELETE FROM user_bonus WHERE user_id=%s", (user_id,))
+            return True
+    return False
+
+def update_bet_progress(user_id: int, bet_amount: int, bot=None):
+    """Cập nhật tiến độ cược và kiểm tra hoàn thành"""
+    bonus_data = query("SELECT required_bet, current_bet FROM user_bonus WHERE user_id=%s", (user_id,))
+    if not bonus_data or bonus_data[0][0] == 0:
+        return False
+    
+    required_bet, current_bet = bonus_data[0]
+    new_bet = current_bet + bet_amount
+    query("UPDATE user_bonus SET current_bet=%s WHERE user_id=%s", (new_bet, user_id))
+    
+    # Kiểm tra nếu hoàn thành
+    if new_bet >= required_bet:
+        import asyncio
+        asyncio.create_task(check_and_notify_bet_completion(user_id, new_bet, required_bet))
+        return True
+    
+    # Gửi thông báo khi đạt mốc
+    if bot:
+        status = get_bet_progress_status(user_id)
+        if status:
+            percent = status['percent']
+            prev_percent = (current_bet / required_bet * 100) if current_bet > 0 else 0
+            milestones = [25, 50, 75]
+            for milestone in milestones:
+                if prev_percent < milestone <= percent:
+                    bar_length = 20
+                    filled = int(bar_length * percent / 100)
+                    bar = "█" * filled + "░" * (bar_length - filled)
+                    message = (
+                        f"📊 **TIẾN ĐỘ HOÀN THÀNH CƯỢC** 📊\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"💰 **Cược vừa thực hiện:** `{bet_amount:,}đ`\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📈 **Tiến độ hiện tại:**\n"
+                        f"`{bar}` `{percent:.1f}%`\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"✅ **Đã cược:** `{new_bet:,}đ`\n"
+                        f"🎯 **Yêu cầu:** `{required_bet:,}đ`\n"
+                        f"⚠️ **Còn thiếu:** `{required_bet - new_bet:,}đ`\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"💪 **Cố gắng thêm `{required_bet - new_bet:,}đ` nữa là hoàn thành!**"
+                    )
+                    try:
+                        import asyncio
+                        asyncio.create_task(bot.send_message(user_id, message, parse_mode="Markdown"))
+                    except:
+                        pass
+                    break
+    return False
+
+def get_bet_progress_status(user_id: int):
+    """Lấy trạng thái tiến độ cược"""
+    bonus_data = query("SELECT bonus_amount, required_bet, current_bet FROM user_bonus WHERE user_id=%s", (user_id,))
+    if not bonus_data or bonus_data[0][1] == 0:
+        return None
+    
+    bonus_amount, required_bet, current_bet = bonus_data[0]
+    percent = (current_bet / required_bet * 100) if required_bet > 0 else 0
+    remaining = required_bet - current_bet
+    
+    return {
+        'bonus_amount': bonus_amount,
+        'required_bet': required_bet,
+        'current_bet': current_bet,
+        'percent': percent,
+        'remaining': remaining,
+        'is_completed': current_bet >= required_bet
+    }
 
 # ===== TƯƠNG TÁC NHÓM =====
 async def track_interaction(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -576,7 +738,7 @@ async def track_interaction(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         rewarded = query("SELECT 1 FROM daily_top_interactions WHERE user_id=%s AND group_id=%s AND rewarded=1 AND interaction_count>=200", (uid, gid))
         if not rewarded:
             query("UPDATE group_interactions SET interaction_count = -200 WHERE user_id=%s AND group_id=%s", (uid, gid))
-            await ctx.bot.send_message(uid, f"🎉 **CHÚC MỪNG!** 🎉\n━━━━━━━━━━━━━━━━━━━━━\n🔥 Bạn đã đạt **200 lượt tương tác** trong nhóm!\n📞 Hãy liên hệ Admin để nhận thưởng hấp dẫn!\n━━━━━━━━━━━━━━━━━━━━━\n📞 **CSKH1:** @sakuri0\n📞 **CSKH2:** @RoGarden\n📞 **CSKH3:** @tomm2710", parse_mode="Markdown")
+            await ctx.bot.send_message(uid, f"🎉 **CHÚC MỪNG!** 🎉\n━━━━━━━━━━━━━━━━━━━━━\n🔥 Bạn đã đạt **200 lượt tương tác** trong nhóm!\n📞 Hãy liên hệ Admin để nhận thưởng hấp dẫn!\n━━━━━━━━━━━━━━━━━━━━━\n📞 **CSKH1:** @sakuri0\n📞 **CSKH2:** @RoGarden", parse_mode="Markdown")
             query("UPDATE daily_top_interactions SET rewarded=1 WHERE user_id=%s AND group_id=%s", (uid, gid))
 
 async def send_interaction_reward(ctx: ContextTypes.DEFAULT_TYPE):
@@ -935,6 +1097,315 @@ async def baotri_hethong_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ **ĐÃ TẮT BẢO TRÌ TOÀN HỆ THỐNG**\n\n✅ Đã gửi thông báo đến {sent_count} người dùng.\n🎮 Bot đã hoạt động trở lại.", parse_mode="Markdown")
     else:
         await update.message.reply_text("❌ Sai cú pháp! Dùng `on` hoặc `off`", parse_mode="Markdown")
+
+# ===== LỆNH /baotriht - BẢO TRÌ HỆ THỐNG TỔNG THỂ =====
+@admin_only
+async def baotri_he_thong_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Bảng bảo trì toàn bộ tính năng và game"""
+    user_id = update.effective_user.id
+    
+    maintenance_items = {
+        'mt_taixiu': {'name': '🎲 TÀI XỈU 3D', 'type': 'game', 'icon': '🎲'},
+        'mt_xocdia': {'name': '💿 XÓC ĐĨA', 'type': 'game', 'icon': '💿'},
+        'mt_duaxe': {'name': '🏎️ ĐUA XE', 'type': 'game', 'icon': '🏎️'},
+        'mt_domin': {'name': '💣 DÒ MÌN', 'type': 'game', 'icon': '💣'},
+        'mt_penalty': {'name': '⚽ PENALTY', 'type': 'game', 'icon': '⚽'},
+        'mt_gomo': {'name': '🪵 GÕ MÕ', 'type': 'game', 'icon': '🪵'},
+        'mt_quayso': {'name': '🔢 QUAY SỐ', 'type': 'game', 'icon': '🔢'},
+        'mt_baucua': {'name': '🦀 BẦU CUA', 'type': 'game', 'icon': '🦀'},
+        'mt_xoso': {'name': '📉 XỔ SỐ', 'type': 'game', 'icon': '📉'},
+        'mt_vongquay': {'name': '🎡 VÒNG QUAY', 'type': 'game', 'icon': '🎡'},
+        'mt_caothap': {'name': '🃏 CAO THẤP', 'type': 'game', 'icon': '🃏'},
+        'mt_rutgo': {'name': '🪵 RÚT GỖ', 'type': 'game', 'icon': '🪵'},
+        'mt_tomau': {'name': '🎨 TÔ MÀU', 'type': 'game', 'icon': '🎨'},
+        'mt_nap': {'name': '💳 NẠP TIỀN', 'type': 'feature', 'icon': '💳'},
+        'mt_rut': {'name': '🛒 RÚT TIỀN', 'type': 'feature', 'icon': '🛒'},
+        'mt_code': {'name': '🎫 CODE QUÀ', 'type': 'feature', 'icon': '🎫'},
+        'mt_checkin': {'name': '🎁 CHECKIN', 'type': 'feature', 'icon': '🎁'},
+        'mt_khobau': {'name': '🏺 KHO BÁU', 'type': 'feature', 'icon': '🏺'},
+        'mt_anon': {'name': '✉️ TIN ẨN DANH', 'type': 'feature', 'icon': '✉️'},
+        'mt_top': {'name': '🏆 TOP ĐẠI GIA', 'type': 'feature', 'icon': '🏆'},
+        'mt_lichsu': {'name': '📜 LỊCH SỬ', 'type': 'feature', 'icon': '📜'},
+        'mt_vip': {'name': '👤 TÀI KHOẢN VIP', 'type': 'feature', 'icon': '👤'},
+    }
+    
+    kb = []
+    kb.append([InlineKeyboardButton("━━━ 🎮 GAME 🎮 ━━━", callback_data="none")])
+    game_items = [(k, v) for k, v in maintenance_items.items() if v['type'] == 'game']
+    for i in range(0, len(game_items), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(game_items):
+                key, item = game_items[i + j]
+                status = "🔴 OFF" if check_mt(key) else "🟢 ON"
+                row.append(InlineKeyboardButton(f"{item['icon']} {item['name']}: {status}", callback_data=f"mt_toggle_{key}"))
+        kb.append(row)
+    
+    kb.append([InlineKeyboardButton("━━━ ⚙️ TÍNH NĂNG ⚙️ ━━━", callback_data="none")])
+    feature_items = [(k, v) for k, v in maintenance_items.items() if v['type'] == 'feature']
+    for i in range(0, len(feature_items), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(feature_items):
+                key, item = feature_items[i + j]
+                status = "🔴 OFF" if check_mt(key) else "🟢 ON"
+                row.append(InlineKeyboardButton(f"{item['icon']} {item['name']}: {status}", callback_data=f"mt_toggle_{key}"))
+        kb.append(row)
+    
+    kb.append([InlineKeyboardButton("🔴 TẮT TẤT CẢ", callback_data="mt_turnoff_all"),
+               InlineKeyboardButton("🟢 BẬT TẤT CẢ", callback_data="mt_turnon_all")])
+    kb.append([InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")])
+    
+    await update.message.reply_text(
+        "🛠 **BẢNG BẢO TRÌ HỆ THỐNG** 🛠\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🟢 **ON** = Hoạt động bình thường\n"
+        "🔴 **OFF** = Đang bảo trì (không thể sử dụng)\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "👇 **Bấm vào từng mục để bật/tắt bảo trì:**",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode="Markdown"
+    )
+
+async def handle_mt_toggle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Xử lý bật/tắt bảo trì từ bảng"""
+    q = update.callback_query
+    uid = q.from_user.id
+    
+    if uid not in ADMIN_IDS:
+        await q.answer("❌ Bạn không có quyền!", show_alert=True)
+        return
+    
+    data = q.data
+    
+    if data == "mt_turnoff_all":
+        keys = ['mt_taixiu', 'mt_xocdia', 'mt_duaxe', 'mt_domin', 'mt_penalty', 'mt_gomo',
+                'mt_quayso', 'mt_baucua', 'mt_xoso', 'mt_vongquay', 'mt_caothap', 'mt_rutgo',
+                'mt_tomau', 'mt_nap', 'mt_rut', 'mt_code', 'mt_checkin', 'mt_khobau', 'mt_anon',
+                'mt_top', 'mt_lichsu', 'mt_vip']
+        for key in keys:
+            query("UPDATE settings SET value='1' WHERE key=%s", (key,))
+        await q.answer("✅ Đã tắt BẢO TRÌ tất cả tính năng và game!", show_alert=True)
+        await baotri_he_thong_cmd(update, ctx)
+        
+    elif data == "mt_turnon_all":
+        keys = ['mt_taixiu', 'mt_xocdia', 'mt_duaxe', 'mt_domin', 'mt_penalty', 'mt_gomo',
+                'mt_quayso', 'mt_baucua', 'mt_xoso', 'mt_vongquay', 'mt_caothap', 'mt_rutgo',
+                'mt_tomau', 'mt_nap', 'mt_rut', 'mt_code', 'mt_checkin', 'mt_khobau', 'mt_anon',
+                'mt_top', 'mt_lichsu', 'mt_vip']
+        for key in keys:
+            query("UPDATE settings SET value='0' WHERE key=%s", (key,))
+        await q.answer("✅ Đã bật HOẠT ĐỘNG tất cả tính năng và game!", show_alert=True)
+        await baotri_he_thong_cmd(update, ctx)
+        
+    elif data.startswith("mt_toggle_"):
+        key = data.replace("mt_toggle_", "")
+        new_val = "1" if not check_mt(key) else "0"
+        query("UPDATE settings SET value=%s WHERE key=%s", (new_val, key))
+        
+        names = {
+            'mt_taixiu': 'TÀI XỈU', 'mt_xocdia': 'XÓC ĐĨA', 'mt_duaxe': 'ĐUA XE',
+            'mt_domin': 'DÒ MÌN', 'mt_penalty': 'PENALTY', 'mt_gomo': 'GÕ MÕ',
+            'mt_quayso': 'QUAY SỐ', 'mt_baucua': 'BẦU CUA', 'mt_xoso': 'XỔ SỐ',
+            'mt_vongquay': 'VÒNG QUAY', 'mt_caothap': 'CAO THẤP', 'mt_rutgo': 'RÚT GỖ',
+            'mt_tomau': 'TÔ MÀU', 'mt_nap': 'NẠP TIỀN', 'mt_rut': 'RÚT TIỀN',
+            'mt_code': 'CODE QUÀ', 'mt_checkin': 'CHECKIN', 'mt_khobau': 'KHO BÁU',
+            'mt_anon': 'TIN ẨN DANH', 'mt_top': 'TOP ĐẠI GIA', 'mt_lichsu': 'LỊCH SỬ',
+            'mt_vip': 'TÀI KHOẢN VIP'
+        }
+        name = names.get(key, key)
+        status = "🔴 ĐANG BẢO TRÌ" if new_val == "1" else "🟢 HOẠT ĐỘNG"
+        await q.answer(f"{name}: {status}", show_alert=True)
+        await baotri_he_thong_cmd(update, ctx)
+
+# ===== LỆNH /baotriid [ID] - BẢO TRÌ THEO NGƯỜI DÙNG =====
+@admin_only
+async def baotri_id_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Bảng bảo trì tính năng và game cho một người dùng cụ thể"""
+    user_id = update.effective_user.id
+    
+    if len(ctx.args) < 1:
+        await update.message.reply_text(
+            "❌ **Cú pháp:** `/baotriid [ID_người_dùng]`\n\n"
+            "📝 **Ví dụ:** `/baotriid 12345678`\n\n"
+            "💡 Sau khi dùng lệnh sẽ hiện ra bảng để bật/tắt bảo trì "
+            "từng tính năng và game cho người dùng đó.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    try:
+        target_id = int(ctx.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ ID không hợp lệ!", parse_mode="Markdown")
+        return
+    
+    user_check = query("SELECT 1 FROM users WHERE user_id=%s", (target_id,))
+    if not user_check:
+        await update.message.reply_text(f"❌ Không tìm thấy người dùng với ID `{target_id}`!", parse_mode="Markdown")
+        return
+    
+    ctx.user_data[f"baotri_target_{user_id}"] = target_id
+    
+    items = {
+        1: {'name': '🎲 TÀI XỈU 3D', 'type': 'game', 'icon': '🎲'},
+        2: {'name': '💿 XÓC ĐĨA', 'type': 'game', 'icon': '💿'},
+        3: {'name': '🏎️ ĐUA XE', 'type': 'game', 'icon': '🏎️'},
+        4: {'name': '💣 DÒ MÌN', 'type': 'game', 'icon': '💣'},
+        5: {'name': '⚽ PENALTY', 'type': 'game', 'icon': '⚽'},
+        6: {'name': '🪵 GÕ MÕ', 'type': 'game', 'icon': '🪵'},
+        7: {'name': '🔢 QUAY SỐ', 'type': 'game', 'icon': '🔢'},
+        8: {'name': '🦀 BẦU CUA', 'type': 'game', 'icon': '🦀'},
+        9: {'name': '📉 XỔ SỐ', 'type': 'game', 'icon': '📉'},
+        10: {'name': '🎡 VÒNG QUAY', 'type': 'game', 'icon': '🎡'},
+        11: {'name': '🃏 CAO THẤP', 'type': 'game', 'icon': '🃏'},
+        12: {'name': '🪵 RÚT GỖ', 'type': 'game', 'icon': '🪵'},
+        13: {'name': '🎨 TÔ MÀU', 'type': 'game', 'icon': '🎨'},
+        'nap': {'name': '💳 NẠP TIỀN', 'type': 'feature', 'icon': '💳'},
+        'rut': {'name': '🛒 RÚT TIỀN', 'type': 'feature', 'icon': '🛒'},
+        'code': {'name': '🎫 CODE QUÀ', 'type': 'feature', 'icon': '🎫'},
+        'checkin': {'name': '🎁 CHECKIN', 'type': 'feature', 'icon': '🎁'},
+        'khobau': {'name': '🏺 KHO BÁU', 'type': 'feature', 'icon': '🏺'},
+        'anon': {'name': '✉️ TIN ẨN DANH', 'type': 'feature', 'icon': '✉️'},
+        'top': {'name': '🏆 TOP ĐẠI GIA', 'type': 'feature', 'icon': '🏆'},
+        'lichsu': {'name': '📜 LỊCH SỬ', 'type': 'feature', 'icon': '📜'},
+        'vip': {'name': '👤 TÀI KHOẢN VIP', 'type': 'feature', 'icon': '👤'},
+    }
+    
+    kb = []
+    kb.append([InlineKeyboardButton("━━━ 🎮 GAME 🎮 ━━━", callback_data="none")])
+    game_items = [(k, v) for k, v in items.items() if v['type'] == 'game']
+    for i in range(0, len(game_items), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(game_items):
+                gid, item = game_items[i + j]
+                is_banned = is_game_banned(target_id, gid)
+                status = "🔴 CẤM" if is_banned else "🟢 MỞ"
+                row.append(InlineKeyboardButton(f"{item['icon']} {item['name']}: {status}", callback_data=f"user_toggle_game_{target_id}_{gid}"))
+        kb.append(row)
+    
+    kb.append([InlineKeyboardButton("━━━ ⚙️ TÍNH NĂNG ⚙️ ━━━", callback_data="none")])
+    feature_items = [(k, v) for k, v in items.items() if v['type'] == 'feature']
+    for i in range(0, len(feature_items), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(feature_items):
+                fkey, item = feature_items[i + j]
+                is_banned = is_feature_banned(target_id, fkey)
+                status = "🔴 CẤM" if is_banned else "🟢 MỞ"
+                row.append(InlineKeyboardButton(f"{item['icon']} {item['name']}: {status}", callback_data=f"user_toggle_feature_{target_id}_{fkey}"))
+        kb.append(row)
+    
+    kb.append([InlineKeyboardButton("🔴 CẤM TẤT CẢ", callback_data=f"user_turnoff_all_{target_id}"),
+               InlineKeyboardButton("🟢 MỞ TẤT CẢ", callback_data=f"user_turnon_all_{target_id}")])
+    kb.append([InlineKeyboardButton("🚫 CẤM TOÀN BỘ USER", callback_data=f"user_ban_full_{target_id}"),
+               InlineKeyboardButton("✅ MỞ TOÀN BỘ USER", callback_data=f"user_unban_full_{target_id}")])
+    kb.append([InlineKeyboardButton("❌ ĐÓNG BẢNG", callback_data="close_admin")])
+    
+    user_info = query("SELECT balance, total_bet FROM users WHERE user_id=%s", (target_id,))
+    balance = user_info[0][0] if user_info else 0
+    total_bet = user_info[0][1] if user_info else 0
+    
+    await update.message.reply_text(
+        f"🛠 **BẢNG BẢO TRÌ NGƯỜI DÙNG** 🛠\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 **ID:** `{target_id}`\n"
+        f"💰 **Số dư:** `{balance:,}đ`\n"
+        f"📊 **Tổng cược:** `{total_bet:,}đ`\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🟢 **MỞ** = Được sử dụng\n"
+        f"🔴 **CẤM** = Bị khóa (không thể sử dụng)\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👇 **Bấm vào từng mục để bật/tắt cấm:**",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode="Markdown"
+    )
+
+async def handle_user_maintenance_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Xử lý bật/tắt cấm cho người dùng"""
+    q = update.callback_query
+    uid = q.from_user.id
+    
+    if uid not in ADMIN_IDS:
+        await q.answer("❌ Bạn không có quyền!", show_alert=True)
+        return
+    
+    data = q.data
+    
+    if data.startswith("user_toggle_game_"):
+        parts = data.split("_")
+        target_id = int(parts[3])
+        game_id = int(parts[4])
+        
+        if is_game_banned(target_id, game_id):
+            query("DELETE FROM banned_games WHERE user_id=%s AND game_id=%s", (target_id, game_id))
+            await q.answer(f"✅ Đã MỞ game ID {game_id} cho user {target_id}", show_alert=True)
+        else:
+            query("INSERT INTO banned_games VALUES(%s, %s) ON CONFLICT DO NOTHING", (target_id, game_id))
+            await q.answer(f"🔴 Đã CẤM game ID {game_id} cho user {target_id}", show_alert=True)
+        
+        fake_ctx = type('obj', (object,), {'args': [str(target_id)]})()
+        await baotri_id_cmd(update, fake_ctx)
+        
+    elif data.startswith("user_toggle_feature_"):
+        parts = data.split("_")
+        target_id = int(parts[3])
+        feature = parts[4]
+        
+        if is_feature_banned(target_id, feature):
+            query("DELETE FROM banned_features WHERE user_id=%s AND feature=%s", (target_id, feature))
+            await q.answer(f"✅ Đã MỞ tính năng {feature} cho user {target_id}", show_alert=True)
+        else:
+            query("INSERT INTO banned_features VALUES(%s, %s) ON CONFLICT DO NOTHING", (target_id, feature))
+            await q.answer(f"🔴 Đã CẤM tính năng {feature} cho user {target_id}", show_alert=True)
+        
+        fake_ctx = type('obj', (object,), {'args': [str(target_id)]})()
+        await baotri_id_cmd(update, fake_ctx)
+        
+    elif data.startswith("user_turnoff_all_"):
+        target_id = int(data.split("_")[3])
+        
+        for game_id in range(1, 14):
+            query("INSERT INTO banned_games VALUES(%s, %s) ON CONFLICT DO NOTHING", (target_id, game_id))
+        
+        features = ['nap', 'rut', 'code', 'checkin', 'khobau', 'anon', 'top', 'lichsu', 'vip']
+        for feature in features:
+            query("INSERT INTO banned_features VALUES(%s, %s) ON CONFLICT DO NOTHING", (target_id, feature))
+        
+        await q.answer(f"🔴 Đã CẤM TẤT CẢ game và tính năng cho user {target_id}", show_alert=True)
+        
+        fake_ctx = type('obj', (object,), {'args': [str(target_id)]})()
+        await baotri_id_cmd(update, fake_ctx)
+        
+    elif data.startswith("user_turnon_all_"):
+        target_id = int(data.split("_")[3])
+        
+        query("DELETE FROM banned_games WHERE user_id=%s", (target_id,))
+        query("DELETE FROM banned_features WHERE user_id=%s", (target_id,))
+        
+        await q.answer(f"🟢 Đã MỞ TẤT CẢ game và tính năng cho user {target_id}", show_alert=True)
+        
+        fake_ctx = type('obj', (object,), {'args': [str(target_id)]})()
+        await baotri_id_cmd(update, fake_ctx)
+        
+    elif data.startswith("user_ban_full_"):
+        target_id = int(data.split("_")[3])
+        
+        query("INSERT INTO banned VALUES(%s) ON CONFLICT (user_id) DO NOTHING", (target_id,))
+        
+        await q.answer(f"🚫 Đã CẤM TOÀN BỘ user {target_id} (không thể dùng bot)", show_alert=True)
+        
+        fake_ctx = type('obj', (object,), {'args': [str(target_id)]})()
+        await baotri_id_cmd(update, fake_ctx)
+        
+    elif data.startswith("user_unban_full_"):
+        target_id = int(data.split("_")[3])
+        
+        query("DELETE FROM banned WHERE user_id=%s", (target_id,))
+        
+        await q.answer(f"✅ Đã MỞ TOÀN BỘ user {target_id}", show_alert=True)
+        
+        fake_ctx = type('obj', (object,), {'args': [str(target_id)]})()
+        await baotri_id_cmd(update, fake_ctx)
 
 async def tatroom_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1697,6 +2168,221 @@ async def check_top_interaction(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     msg += "━━━━━━━━━━━━━━━━━━━━━\n🎯 **MỐC THƯỞNG:** 200 lượt → Liên hệ Admin nhận quà!"
     await update.message.reply_text(msg, parse_mode="Markdown")
 
+# ===== LỆNH KIỂM TRA TIẾN ĐỘ CƯỢC =====
+async def check_bet_progress_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Kiểm tra tiến độ cược khuyến mãi"""
+    uid = update.effective_user.id
+    if is_banned(uid):
+        return
+    
+    status = get_bet_progress_status(uid)
+    
+    if not status:
+        await update.message.reply_text(
+            "📊 **KHÔNG CÓ KHUYẾN MÃI NÀO ĐANG HOẠT ĐỘNG**\n━━━━━━━━━━━━━━━━━━━━━\n"
+            "💰 Bạn hiện không có tiền khuyến mãi cần hoàn thành cược.\n\n"
+            "💡 **Để nhận khuyến mãi:**\n"
+            "• Nạp tiền từ 50,000đ trở lên\n"
+            "• Hệ thống sẽ tự động đề xuất khuyến mãi\n"
+            "• Hoặc liên hệ Admin để được hỗ trợ!",
+            parse_mode="Markdown"
+        )
+        return
+    
+    percent = status['percent']
+    bar_length = 20
+    filled = int(bar_length * percent / 100)
+    bar = "█" * filled + "░" * (bar_length - filled)
+    
+    message = (
+        f"📊 **TIẾN ĐỘ HOÀN THÀNH CƯỢC** 📊\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎁 **Tiền khuyến mãi đã nhận:** `+{status['bonus_amount']:,}đ`\n"
+        f"🎯 **Yêu cầu cược:** `{status['required_bet']:,}đ` (x3 vòng)\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📈 **Tiến độ:**\n"
+        f"`{bar}` `{percent:.1f}%`\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ **Đã cược:** `{status['current_bet']:,}đ`\n"
+        f"⚠️ **Cần cược thêm:** `{status['remaining']:,}đ`\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    )
+    
+    if status['is_completed']:
+        message += (
+            f"🎉 **CHÚC MỪNG! BẠN ĐÃ HOÀN THÀNH!** 🎉\n"
+            f"🔓 Bạn đã có thể rút tiền bình thường!"
+        )
+    else:
+        message += (
+            f"💪 **CỐ GẮNG LÊN!**\n"
+            f"🎮 Tham gia các trò chơi để hoàn thành yêu cầu nhé!"
+        )
+    
+    await update.message.reply_text(message, parse_mode="Markdown")
+
+async def admin_check_bet_progress_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Admin kiểm tra tiến độ cược của người dùng"""
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Bạn không có quyền sử dụng lệnh này!")
+        return
+    
+    if len(ctx.args) < 1:
+        await update.message.reply_text(
+            "❌ **Cú pháp:** `/checkprogressadmin [ID_người_dùng]`\n\n"
+            "📝 **Ví dụ:** `/checkprogressadmin 12345678`\n"
+            "💡 Xem tiến độ cược khuyến mãi của người dùng",
+            parse_mode="Markdown"
+        )
+        return
+    
+    try:
+        target_id = int(ctx.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ ID không hợp lệ!", parse_mode="Markdown")
+        return
+    
+    status = get_bet_progress_status(target_id)
+    
+    if not status:
+        await update.message.reply_text(
+            f"📊 **Người dùng `{target_id}` không có khuyến mãi nào đang hoạt động!**",
+            parse_mode="Markdown"
+        )
+        return
+    
+    percent = status['percent']
+    bar_length = 20
+    filled = int(bar_length * percent / 100)
+    bar = "█" * filled + "░" * (bar_length - filled)
+    
+    message = (
+        f"📊 **TIẾN ĐỘ CƯỢC CỦA USER `{target_id}`** 📊\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎁 **Tiền khuyến mãi:** `+{status['bonus_amount']:,}đ`\n"
+        f"🎯 **Yêu cầu cược:** `{status['required_bet']:,}đ`\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📈 **Tiến độ:**\n"
+        f"`{bar}` `{percent:.1f}%`\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ **Đã cược:** `{status['current_bet']:,}đ`\n"
+        f"⚠️ **Còn thiếu:** `{status['remaining']:,}đ`\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    )
+    
+    if status['is_completed']:
+        message += f"✅ **User đã hoàn thành yêu cầu cược!**"
+    else:
+        message += f"⏳ **User chưa hoàn thành yêu cầu cược!**"
+    
+    await update.message.reply_text(message, parse_mode="Markdown")
+
+# ===== RESET CODE TÂN THỦ =====
+@admin_only
+async def reset_tanthu_code_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Reset code tân thủ cho người dùng"""
+    if len(ctx.args) < 1:
+        await update.message.reply_text(
+            "❌ **Cú pháp:** `/resettanthu [ID_người_dùng]`\n\n"
+            "📝 **Ví dụ:** `/resettanthu 12345678`\n"
+            "💡 Dùng để reset code tân thủ cho user (cho phép nhận lại code mới)\n"
+            "⚠️ Chỉ dùng khi user chưa nhập code cũ!",
+            parse_mode="Markdown"
+        )
+        return
+    
+    try:
+        target_id = int(ctx.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ ID không hợp lệ!", parse_mode="Markdown")
+        return
+    
+    user_check = query("SELECT 1 FROM users WHERE user_id=%s", (target_id,))
+    if not user_check:
+        await update.message.reply_text(f"❌ Không tìm thấy người dùng với ID `{target_id}`!", parse_mode="Markdown")
+        return
+    
+    tanthu_data = query("SELECT code, used FROM tanthu_code WHERE user_id=%s", (target_id,))
+    
+    if not tanthu_data:
+        await update.message.reply_text(f"❌ User `{target_id}` chưa từng nhận code tân thủ!", parse_mode="Markdown")
+        return
+    
+    old_code = tanthu_data[0][0]
+    used_status = tanthu_data[0][1]
+    
+    if used_status == 1:
+        await update.message.reply_text(
+            f"❌ User `{target_id}` đã sử dụng code tân thủ `{old_code}` rồi!\n"
+            f"📌 Không thể reset vì user đã nhận thưởng.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    query("DELETE FROM tanthu_code WHERE user_id=%s", (target_id,))
+    query("DELETE FROM codes WHERE code=%s", (old_code,))
+    
+    new_code = gen_code()
+    current_time = get_vietnam_datetime_db()
+    query("INSERT INTO tanthu_code (user_id, code, received_at, used) VALUES (%s, %s, %s, 0)", 
+          (target_id, new_code, current_time))
+    query("INSERT INTO codes (code, reward, uses) VALUES (%s, %s, %s)", (new_code, 20000, 1))
+    
+    await update.message.reply_text(
+        f"✅ **RESET CODE TÂN THỦ THÀNH CÔNG!**\n━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 **User ID:** `{target_id}`\n"
+        f"❌ **Code cũ đã xóa:** `{old_code}`\n"
+        f"✅ **Code mới:** `{new_code}`\n"
+        f"💰 **Giá trị:** `20,000đ`\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 User có thể dùng `/code {new_code}` để nhận thưởng!",
+        parse_mode="Markdown"
+    )
+    
+    try:
+        await ctx.bot.send_message(
+            target_id,
+            f"🔄 **THÔNG BÁO TỪ ADMIN** 🔄\n━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📌 Bạn đã được cấp lại **CODE TÂN THỦ** mới!\n\n"
+            f"🎫 **Code mới:** `{new_code}`\n"
+            f"💰 **Giá trị:** `20,000đ`\n\n"
+            f"💡 Dùng lệnh: `/code {new_code}` để nhận thưởng!\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ Mỗi người chỉ được nhận DUY NHẤT 1 LẦN!",
+            parse_mode="Markdown"
+        )
+    except:
+        pass
+
+@admin_only
+async def list_tanthu_code_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Xem danh sách code tân thủ chưa sử dụng"""
+    pending_codes = query("""
+        SELECT tc.user_id, tc.code, tc.received_at, u.balance 
+        FROM tanthu_code tc
+        LEFT JOIN users u ON tc.user_id = u.user_id
+        WHERE tc.used = 0
+        ORDER BY tc.received_at DESC
+    """)
+    
+    if not pending_codes:
+        await update.message.reply_text("📋 Không có code tân thủ nào đang chờ sử dụng!", parse_mode="Markdown")
+        return
+    
+    msg = "🎫 **DANH SÁCH CODE TÂN THỦ CHƯA SỬ DỤNG** 🎫\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    for user_id, code, received_at, balance in pending_codes[:20]:
+        msg += f"\n👤 **User ID:** `{user_id}`\n"
+        msg += f"🎫 **Code:** `{code}`\n"
+        msg += f"💰 **Số dư user:** `{balance:,}đ`\n"
+        msg += f"📅 **Cấp lúc:** {received_at}\n"
+        msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    
+    if len(pending_codes) > 20:
+        msg += f"\n... và {len(pending_codes) - 20} code khác"
+    
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
 # ===== CƯỢC TỰ DO =====
 def get_betting_keyboard(amounts, callback_prefix, custom_bet=True):
     kb = []
@@ -1724,7 +2410,7 @@ async def request_custom_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE, gam
         "game_id": game_id,
         "step": "waiting_for_amount"
     }
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ HỦY", callback_data="cancel_custom_bet")]])
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ HỦY CƯỢC", callback_data="cancel_custom_bet")]])
     await update.message.reply_text(
         f"✏️ **CƯỢC TỰ DO - {game_name}** ✏️\n━━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 Vui lòng **nhập số tiền** bạn muốn cược:\n\n"
@@ -1733,6 +2419,7 @@ async def request_custom_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE, gam
         f"• Tối đa: `10,000,000đ`\n"
         f"• Phải là số nguyên, không dấu cách\n\n"
         f"📝 **Ví dụ:** `50000` (50k) hoặc `1000000` (1 triệu)\n\n"
+        f"💡 Gõ `hủy` để thoát khỏi cược tự do\n\n"
         f"⏳ Nhập số tiền ngay bên dưới!",
         reply_markup=kb,
         parse_mode="Markdown"
@@ -1741,36 +2428,47 @@ async def request_custom_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE, gam
 async def handle_custom_bet_amount(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     text = update.message.text.strip()
+    
     if f"custom_bet_{uid}" not in ctx.user_data:
         return False
     bet_data = ctx.user_data[f"custom_bet_{uid}"]
     if bet_data.get("step") != "waiting_for_amount":
         return False
+    
+    # Kiểm tra nếu người dùng nhập lệnh hủy
+    if text.lower() in ['cancel', 'hủy', 'huỷ', 'thoat', 'thoát']:
+        del ctx.user_data[f"custom_bet_{uid}"]
+        await update.message.reply_text("❌ **ĐÃ HỦY CƯỢC TỰ DO!**\n\nBạn có thể bắt đầu lại bất cứ lúc nào.", parse_mode="Markdown")
+        return True
+    
     try:
         amount = int(text.replace(",", "").replace(".", ""))
         if amount < 1000:
-            await update.message.reply_text("❌ Số tiền cược tối thiểu là `1,000đ`!\nVui lòng nhập lại:", parse_mode="Markdown")
+            await update.message.reply_text("❌ Số tiền cược tối thiểu là `1,000đ`!\nVui lòng nhập lại hoặc gõ `hủy` để thoát:", parse_mode="Markdown")
             return True
         if amount > 10000000:
-            await update.message.reply_text("❌ Số tiền cược tối đa là `10,000,000đ`!\nVui lòng nhập lại:", parse_mode="Markdown")
+            await update.message.reply_text("❌ Số tiền cược tối đa là `10,000,000đ`!\nVui lòng nhập lại hoặc gõ `hủy` để thoát:", parse_mode="Markdown")
             return True
     except ValueError:
-        await update.message.reply_text("❌ Số tiền không hợp lệ!\nVui lòng nhập số nguyên (VD: 50000):", parse_mode="Markdown")
+        await update.message.reply_text("❌ Số tiền không hợp lệ!\nVui lòng nhập số nguyên (VD: 50000) hoặc gõ `hủy` để thoát:", parse_mode="Markdown")
         return True
+    
     balance = get_balance(uid)
     if balance < amount:
-        await update.message.reply_text(f"❌ Số dư không đủ!\n💰 Số dư của bạn: `{balance:,}đ`\n💰 Bạn muốn cược: `{amount:,}đ`\n\nVui lòng nhập số tiền nhỏ hơn:", parse_mode="Markdown")
+        await update.message.reply_text(f"❌ Số dư không đủ!\n💰 Số dư của bạn: `{balance:,}đ`\n💰 Bạn muốn cược: `{amount:,}đ`\n\nVui lòng nhập số tiền nhỏ hơn hoặc gõ `hủy` để thoát:", parse_mode="Markdown")
         return True
+    
     bet_data["amount"] = amount
     bet_data["step"] = "waiting_for_choice"
     game_type = bet_data["callback_type"]
+    
     if game_type == "tx" or game_type == "tx_group":
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎲 TÀI (x1.95)", callback_data=f"p_tx_tai_{amount}"),
              InlineKeyboardButton("🎲 XỈU (x1.95)", callback_data=f"p_tx_xiu_{amount}")],
             [InlineKeyboardButton("🔴 CHẴN (x1.95)", callback_data=f"p_tx_chan_{amount}"),
              InlineKeyboardButton("⚪ LẺ (x1.95)", callback_data=f"p_tx_le_{amount}")],
-            [InlineKeyboardButton("❌ HỦY", callback_data="cancel_custom_bet")]
+            [InlineKeyboardButton("❌ HỦY CƯỢC", callback_data="cancel_custom_bet")]
         ])
         await update.message.reply_text(
             f"✅ **ĐÃ CHỌN CƯỢC TỰ DO**\n━━━━━━━━━━━━━━━━━━━━━\n💰 Số tiền: `{amount:,}đ`\n\n🎲 **Chọn cửa cược:**",
@@ -2676,7 +3374,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ["💳 NẠP TIỀN", "🛒 RÚT TIỀN"],
         ["🎁 CHECKIN", "🎁 CODE TÂN THỦ", "🎁 KHUYẾN MÃI NẠP"],
         ["📜 LỊCH SỬ", "🏆 TOP ĐẠI GIA"],
-        ["📞 HỖ TRỢ CSKH1", "📞 HỖ TRỢ CSKH2", "📞 HỖ TRỢ CSKH3"]
+        ["📞 HỖ TRỢ CSKH1", "📞 HỖ TRỢ CSKH2"]
     ], resize_keyboard=True)
     welcome_text = (f"👋 **CHÀO MỪNG {update.effective_user.first_name.upper()} ĐÃ THAM GIA!**\n\n🛡 **{get_bot_name()}**\nHệ thống trò chơi minh bạch — uy tín hàng đầu.\n━━━━━━━━━━━━━━━━━━━━━\n💰 **MIN RÚT TIỀN:** `50,000đ`\n💳 **MIN NẠP TIỀN:** `10,000đ`\n⚠️ *Lưu ý: Nạp dưới 10k sẽ không được tự động duyệt.*\n\n⚖️ **CAM KẾT MINH BẠCH:**\n• **100%** Kết quả hoàn toàn ngẫu nhiên.\n• 🔄 **KHÔNG** can thiệp kết quả dưới mọi hình thức.\n━━━━━━━━━━━━━━━━━━━━━\n🚀 Chúc bạn có những trải nghiệm may mắn và thú vị!")
     await update.message.reply_text(welcome_text, reply_markup=menu, parse_mode="Markdown")
@@ -2742,7 +3440,7 @@ def get_promotion_text():
     text = "🎁 **KHUYẾN MÃI NẠP TIỀN** 🎁\n━━━━━━━━━━━━━━━━━━━━━\n"
     for promo in PROMOTIONS:
         text += f"• Nạp {promo['display']}\n"
-    text += "━━━━━━━━━━━━━━━━━━━━━\n📌 **LƯU Ý:**\n• ⏰ Mỗi ngày được nhận 1 lần\n• 💰 Tiền khuyến mãi cần cược **x3** vòng để rút\n• 🎮 khuyến mãi sau khi nạp tự động lên 100%\n━━━━━━━━━━━━━━━━━━━━━\n📞 **CSKH1:** @sakuri0\n📞 **CSKH2:** @RoGarden\n📞 **CSKH3:** @tomm2710"
+    text += "━━━━━━━━━━━━━━━━━━━━━\n📌 **LƯU Ý:**\n• ⏰ Mỗi ngày được nhận 1 lần\n• 💰 Tiền khuyến mãi cần cược **x3** vòng để rút\n• 🎮 khuyến mãi sau khi nạp tự động lên 100%\n━━━━━━━━━━━━━━━━━━━━━\n📞 **CSKH1:** @sakuri0\n📞 **CSKH2:** @RoGarden"
     return text
 
 async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2770,12 +3468,82 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if txt == "🏆 TOP ĐẠI GIA":
         return await top_cmd(update, ctx)
     if txt == "🎁 CODE TÂN THỦ":
-        msg = ("🎁 **CODE TÂN THỦ** 🎁\n\n✨ **CHÀO MỪNG THÀNH VIÊN MỚI!** ✨\n\n📌 **HƯỚNG DẪN NHẬN CODE:**\n• Liên hệ CSKH để được cấp CODE TÂN THỦ\n• CODE có giá trị: `20,000đ`\n• Mỗi tài khoản chỉ nhận được 1 lần\n\n━━━━━━━━━━━━━━━━━━━━━\n📞 **CSKH1:** @sakuri0\n📞 **CSKH2:** @RoGarden \n📞 **CSKH3:** @tomm2710\n━━━━━━━━━━━━━━━━━━━━━\n\n💡 Sau khi nhận CODE, dùng lệnh: `/code [MÃ_CODE]`")
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📞 CSKH1", url="https://t.me/sakuri0"), InlineKeyboardButton("📞 CSKH2", url="https://t.me/RoGarden"), InlineKeyboardButton("📞 CSKH3", url="https://t.me/tomm2710")]])
+        # Kiểm tra xem user đã nhận code tân thủ chưa
+        check_user = query("SELECT code, used FROM tanthu_code WHERE user_id=%s", (uid,))
+        
+        if check_user:
+            if check_user[0][1] == 0:
+                old_code = check_user[0][0]
+                msg = (
+                    f"🎁 **CODE TÂN THỦ** 🎁\n━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"❌ **BẠN ĐÃ NHẬN CODE TÂN THỦ RỒI!**\n\n"
+                    f"📌 **Code của bạn:** `{old_code}`\n"
+                    f"💰 **Giá trị:** `20,000đ`\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"💡 Dùng lệnh: `/code {old_code}` để nhận thưởng!\n\n"
+                    f"⚠️ **LƯU Ý:** Mỗi người chỉ được nhận **DUY NHẤT 1 LẦN** code tân thủ!"
+                )
+                kb = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🎁 NHẬN THƯỞNG NGAY", callback_data=f"use_tanthu_code_{old_code}")
+                ]])
+                return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
+            else:
+                msg = (
+                    f"🎁 **CODE TÂN THỦ** 🎁\n━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"❌ **BẠN ĐÃ SỬ DỤNG CODE TÂN THỦ RỒI!**\n\n"
+                    f"✅ Bạn đã nhận `20,000đ` từ code tân thủ.\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"💡 **Các cách khác để nhận thêm code:**\n"
+                    f"• 📞 Liên hệ CSKH để nhận code sự kiện\n"
+                    f"• 🎯 Tương tác trong nhóm để nhận code top tuần\n"
+                    f"• 🎁 Tham gia các sự kiện đặc biệt\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📞 **CSKH1:** @sakuri0\n"
+                    f"📞 **CSKH2:** @RoGarden"
+                )
+                kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📞 CSKH1", url="https://t.me/sakuri0"),
+                     InlineKeyboardButton("📞 CSKH2", url="https://t.me/RoGarden")]
+                ])
+                return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
+        
+        # Tạo code mới cho user
+        new_code = gen_code()
+        current_time = get_vietnam_datetime_db()
+        
+        query("INSERT INTO tanthu_code (user_id, code, received_at, used) VALUES (%s, %s, %s, 0) ON CONFLICT (user_id) DO UPDATE SET code=%s, received_at=%s, used=0", 
+              (uid, new_code, current_time, new_code, current_time))
+        
+        query("INSERT INTO codes (code, reward, uses) VALUES (%s, %s, %s) ON CONFLICT (code) DO NOTHING", (new_code, 20000, 1))
+        
+        msg = (
+            f"🎁 **CHÀO MỪNG TÂN THỦ!** 🎁\n━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✨ **BẠN ĐÃ NHẬN ĐƯỢC CODE TÂN THỦ!** ✨\n\n"
+            f"📌 **Code của bạn:** `{new_code}`\n"
+            f"💰 **Giá trị:** `20,000đ`\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📝 **HƯỚNG DẪN NHẬN THƯỞNG:**\n"
+            f"1️⃣ Copy mã code: `{new_code}`\n"
+            f"2️⃣ Nhập lệnh: `/code {new_code}`\n"
+            f"3️⃣ Nhận ngay `20,000đ` vào tài khoản!\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ **LƯU Ý QUAN TRỌNG:**\n"
+            f"• 🔐 Mỗi người chỉ được nhận **DUY NHẤT 1 LẦN** code tân thủ\n"
+            f"• ⏰ Code có hiệu lực vĩnh viễn (không giới hạn thời gian)\n"
+            f"• 🎮 Sau khi nhập code, tiền sẽ được cộng trực tiếp vào số dư\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎮 **Chúc bạn chơi game vui vẻ và may mắn!**\n"
+            f"💪 Hãy tham gia ngay các trò chơi để nhận thêm nhiều phần thưởng!"
+        )
+        
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🎁 NHẬN THƯỞNG NGAY", callback_data=f"use_tanthu_code_{new_code}")
+        ]])
+        
         return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
     if txt == "🎁 KHUYẾN MÃI NẠP":
         promo_text = get_promotion_text()
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📞 CSKH1", url="https://t.me/sakuri0"), InlineKeyboardButton("📞 CSKH2", url="https://t.me/RoGarden"), InlineKeyboardButton("📞 CSKH3", url="https://t.me/tomm2710")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📞 CSKH1", url="https://t.me/sakuri0"), InlineKeyboardButton("📞 CSKH2", url="https://t.me/RoGarden")]])
         return await update.message.reply_text(promo_text, reply_markup=kb, parse_mode="Markdown")
     if txt == "💳 NẠP TIỀN":
         if is_feature_banned(uid, 'nap'):
@@ -2827,10 +3595,6 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if txt == "📞 HỖ TRỢ CSKH2":
         msg = ("📞 **HỖ TRỢ KHÁCH HÀNG 2**\n\n👤 **CSKH2:** @RoGarden\n💬 Phản hồi trong giờ hành chính!\n━━━━━━━━━━━━━━━━━━━━━\n📌 **Các vấn đề có thể liên hệ:**\n• Nạp tiền chậm\n• Rút tiền chưa được duyệt\n• Khiếu nại kết quả game\n• Nhận CODE tân thủ\n• Nhận khuyến mãi nạp")
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 NHẮN CSKH2", url="https://t.me/RoGarden")]])
-        return await user_reply.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
-    if txt == "📞 HỖ TRỢ CSKH3":
-        msg = ("📞 **HỖ TRỢ KHÁCH HÀNG 3**\n\n👤 **CSKH3:** @tomm2710\n💬 Phản hồi trong giờ hành chính!\n━━━━━━━━━━━━━━━━━━━━━\n📌 **Các vấn đề có thể liên hệ:**\n• Nạp tiền chậm\n• Rút tiền chưa được duyệt\n• Khiếu nại kết quả game\n• Nhận CODE tân thủ\n• Nhận khuyến mãi nạp")
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 NHẮN CSKH3", url="https://t.me/tomm2710")]])
         return await user_reply.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
     if len(parts) == 2 and parts[1].isdigit():
         code, amt = parts[0].upper(), int(parts[1])
@@ -3043,6 +3807,54 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await q.answer("❌ Đây không phải là yêu cầu của bạn!", show_alert=True)
             return
         await q.message.edit_text(f"❌ **Bạn đã từ chối nhận khuyến mãi!**\n\n💰 Số dư hiện tại: `{get_balance(target_id):,}đ`\n\nNếu có nhu cầu nhận khuyến mãi, vui lòng liên hệ Admin!", parse_mode="Markdown")
+    
+    # Xử lý nhận code tân thủ từ nút bấm
+    if d.startswith("use_tanthu_code_"):
+        code = d.replace("use_tanthu_code_", "")
+        
+        check_usage = query("SELECT used FROM tanthu_code WHERE user_id=%s AND code=%s", (uid, code))
+        if not check_usage:
+            await q.answer("❌ Code không hợp lệ!", show_alert=True)
+            return
+        
+        if check_usage[0][0] == 1:
+            await q.answer("❌ Bạn đã sử dụng code tân thủ rồi!", show_alert=True)
+            return
+        
+        code_data = query("SELECT reward, uses FROM codes WHERE code=%s", (code,))
+        if not code_data or code_data[0][1] <= 0:
+            await q.answer("❌ Code đã hết hạn hoặc không tồn tại!", show_alert=True)
+            return
+        
+        reward = code_data[0][0]
+        
+        today = get_vietnam_date()
+        code_count = query("SELECT COUNT(*) FROM code_usage WHERE user_id=%s AND used_date=%s", (uid, today))
+        if code_count and code_count[0][0] >= 3:
+            await q.answer("❌ Hôm nay bạn đã dùng đủ 3 code rồi!", show_alert=True)
+            return
+        
+        add_money(uid, reward, f"Code tân thủ: {code}")
+        query("UPDATE tanthu_code SET used=1 WHERE user_id=%s AND code=%s", (uid, code))
+        query("UPDATE codes SET uses=uses-1 WHERE code=%s", (code,))
+        query("INSERT INTO code_usage VALUES(%s, %s, %s)", (uid, code, today))
+        
+        remaining = 3 - (code_count[0][0] + 1)
+        
+        await q.message.edit_text(
+            f"🎉 **NHẬN CODE TÂN THỦ THÀNH CÔNG!** 🎉\n━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎫 **Mã code:** `{code}`\n"
+            f"💰 **Số tiền nhận được:** `+{reward:,}đ`\n"
+            f"💵 **Số dư hiện tại:** `{get_balance(uid):,}đ`\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 **Hôm nay còn:** `{remaining}/3` lượt nhập code.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎮 **Chúc bạn chơi game vui vẻ!**\n"
+            f"💪 Hãy khám phá các trò chơi để nhận thêm nhiều phần thưởng!",
+            parse_mode="Markdown"
+        )
+        await q.answer()
+        return
     
     if d.startswith("adm_page_"):
         if uid not in ADMIN_IDS: return
@@ -3718,6 +4530,15 @@ application.add_handler(CommandHandler("checktt", check_top_interaction))
 application.add_handler(CommandHandler("chinhkq", chinhkq_cmd))
 application.add_handler(CommandHandler("daban", daban_cmd))
 application.add_handler(CommandHandler("mofull", mofull_cmd))
+# LỆNH BẢO TRÌ HỆ THỐNG VÀ NGƯỜI DÙNG
+application.add_handler(CommandHandler("baotriht", baotri_he_thong_cmd))
+application.add_handler(CommandHandler("baotriid", baotri_id_cmd))
+# LỆNH KIỂM TRA TIẾN ĐỘ CƯỢC
+application.add_handler(CommandHandler("checkprogress", check_bet_progress_cmd))
+application.add_handler(CommandHandler("checkprogressadmin", admin_check_bet_progress_cmd))
+# LỆNH QUẢN LÝ CODE TÂN THỦ
+application.add_handler(CommandHandler("resettanthu", reset_tanthu_code_cmd))
+application.add_handler(CommandHandler("listtanthu", list_tanthu_code_cmd))
 
 if application.job_queue:
     application.job_queue.run_daily(bao_hiem_vip, time=datetime.strptime("00:00:01", "%H:%M:%S").time())
@@ -3729,8 +4550,10 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_g
 GROUP_IDS = [-1003663678808]
 
 async def main():
+    global _bot_instance
     await application.initialize()
     await application.start()
+    _bot_instance = application.bot
     for gid in GROUP_IDS:
         try:
             room_betting_enabled[gid] = True
