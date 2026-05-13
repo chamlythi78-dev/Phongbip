@@ -91,6 +91,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
             }
             group_games[group_id] = game_state
 
+            # 1. Gửi tin nhắn bắt đầu (Đã bỏ mức cược cố định)
             start_msg = await bot.send_message(
                 chat_id,
                 f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
@@ -101,224 +102,108 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 f"• Xỉu (3-10 điểm): `x [số_tiền]`\n"
                 f"• Chẵn (tổng điểm chẵn): `c [số_tiền]`\n"
                 f"• Lẻ (tổng điểm lẻ): `l [số_tiền]`\n\n"
-                f"💰 **MỨC CƯỢC HỢP LỆ:** `1k | 5k | 10k | 50k | 100k | 500k`\n"
-                f"✏️ **CƯỢC TỰ DO:** Nhập số tiền bất kỳ (1k-500k)\n"
                 f"🏆 **Tỉ lệ thưởng: x1.95**\n\n"
-                f"📝 **Ví dụ:** `t 10000` (cược Tài 10,000đ), `c 50000` (cược Chẵn 50,000đ)",
+                f"📝 **Ví dụ:** `t 100000` | `c 50000`",
                 parse_mode="Markdown"
             )
             game_state["message_id"] = start_msg.message_id
 
-            current_second = DEFAULT_CYCLE_TIME
-            last_reminder_second = DEFAULT_CYCLE_TIME
-            chat_locked = False
+            # 2. Đếm ngược và báo thời gian mỗi 20s
+            current_second = 60
+            REMINDER_SECONDS = [60, 40, 20, 10, 5, 3, 2, 1] 
 
             while current_second > 0:
                 await asyncio.sleep(1)
                 current_second -= 1
 
-                if not room_betting_enabled.get(group_id, True):
-                    await bot.edit_message_text(
-                        f"🔴 **PHÒNG ĐÃ BỊ KHÓA CƯỢC**\n\nAdmin đã tắt tính năng đặt cược trong nhóm này.\nVui lòng chờ Admin bật lại!",
-                        chat_id=chat_id,
-                        message_id=game_state["message_id"],
-                        parse_mode="Markdown"
-                    )
-                    group_games.pop(group_id, None)
-                    await asyncio.sleep(5)
-                    break
-
-                if current_second in DEFAULT_REMINDER_INTERVALS and current_second != last_reminder_second:
-                    last_reminder_second = current_second
-                    
+                if current_second in REMINDER_SECONDS:
                     tai_count = sum(1 for b in game_state['bets'].values() if b["choice"] == "tai")
                     xiu_count = sum(1 for b in game_state['bets'].values() if b["choice"] == "xiu")
                     chan_count = sum(1 for b in game_state['bets'].values() if b["choice"] == "chan")
                     le_count = sum(1 for b in game_state['bets'].values() if b["choice"] == "le")
-                    total_players = len(game_state['bets'])
                     
                     try:
-                        if current_second >= 10:
-                            await bot.edit_message_text(
-                                f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
-                                f"⚡ **ĐẶT CƯỢC NGAY!**\n"
-                                f"⏱️ Thời gian còn lại: `{current_second}s`\n\n"
-                                f"💰 **THỐNG KÊ CƯỢC:**\n"
-                                f"🎲 TÀI: `{tai_count}` người\n"
-                                f"🎲 XỈU: `{xiu_count}` người\n"
-                                f"🔴 CHẴN: `{chan_count}` người\n"
-                                f"⚪ LẺ: `{le_count}` người\n"
-                                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                                f"👥 Tổng số người: `{total_players}`\n"
-                                f"📝 Lệnh: `t [tiền]` (TÀI), `x [tiền]` (XỈU), `c [tiền]` (CHẴN), `l [tiền]` (LẺ)",
-                                chat_id=chat_id,
-                                message_id=game_state["message_id"],
-                                parse_mode="Markdown"
-                            )
-                        else:
-                            await bot.edit_message_text(
-                                f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
-                                f"⚠️ **CHUẨN BỊ ĐÓNG CƯỢC!**\n"
-                                f"⏱️ Còn `{current_second}s`...\n\n"
-                                f"💰 Đã có `{total_players}` người đặt cược.\n"
-                                f"🎲 TÀI:{tai_count} | XỈU:{xiu_count} | CHẴN:{chan_count} | LẺ:{le_count}",
-                                chat_id=chat_id,
-                                message_id=game_state["message_id"],
-                                parse_mode="Markdown"
-                            )
-                    except Exception:
-                        pass
-
-            if not room_betting_enabled.get(group_id, True):
-                continue
-
-            if current_second == 0:
-                chat_locked = True
-                await bot.send_message(chat_id, "🔒 **CHAT ĐÃ BỊ KHÓA!**\n━━━━━━━━━━━━━━━━━━━━━\n⏳ Đang xử lý kết quả...\nVui lòng chờ giây lát!", parse_mode="Markdown")
+                        await bot.edit_message_text(
+                            f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
+                            f"{'⚠️ **SẮP ĐÓNG CƯỢC!**' if current_second < 10 else '⚡ **ĐẶT CƯỢC NGAY!**'}\n"
+                            f"⏱️ Thời gian còn lại: `{current_second}s`\n\n"
+                            f"💰 **THỐNG KÊ:**\n"
+                            f"🎲 TÀI: `{tai_count}` | XỈU: `{xiu_count}`\n"
+                            f"🔴 CHẴN: `{chan_count}` | ⚪ LẺ: `{le_count}`\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"👥 Tổng người chơi: `{len(game_state['bets'])}`",
+                            chat_id=chat_id,
+                            message_id=game_state["message_id"],
+                            parse_mode="Markdown"
+                        )
+                    except: pass
 
             game_state["status"] = "rolling"
-            
-            player_count = len(game_state['bets'])
-            total_bet_before = sum(b["amount"] for b in game_state['bets'].values())
-            
-            tai_total = sum(b["amount"] for b in game_state['bets'].values() if b["choice"] == "tai")
-            xiu_total = sum(b["amount"] for b in game_state['bets'].values() if b["choice"] == "xiu")
-            chan_total = sum(b["amount"] for b in game_state['bets'].values() if b["choice"] == "chan")
-            le_total = sum(b["amount"] for b in game_state['bets'].values() if b["choice"] == "le")
-            
-            await bot.edit_message_text(
-                f"🎲 **{get_bot_name()} - TÀI XỈU 3D** 🎲\n\n"
-                f"🔒 **ĐÃ KHÓA CƯỢC!**\n"
-                f"👥 Số người chơi: `{player_count}`\n"
-                f"💰 Tổng cược: `{total_bet_before:,}đ`\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📊 **CHI TIẾT CƯỢC:**\n"
-                f"🎲 TÀI: `{tai_total:,}đ`\n"
-                f"🎲 XỈU: `{xiu_total:,}đ`\n"
-                f"🔴 CHẴN: `{chan_total:,}đ`\n"
-                f"⚪ LẺ: `{le_total:,}đ`\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🎲 Đang tung xúc sắc...",
-                chat_id=chat_id,
-                message_id=game_state["message_id"],
-                parse_mode="Markdown"
-            )
+            await bot.send_message(chat_id, "🔒 **ĐÃ ĐÓNG CƯỢC!**\n⏳ Đang lắc xúc sắc...", parse_mode="Markdown")
 
-            await asyncio.sleep(2)
-
-            dice1_msg = await bot.send_dice(chat_id, emoji="🎲")
-            dice2_msg = await bot.send_dice(chat_id, emoji="🎲")
-            dice3_msg = await bot.send_dice(chat_id, emoji="🎲")
+            # 3. Tung xúc sắc
+            d1 = await bot.send_dice(chat_id, emoji="🎲")
+            d2 = await bot.send_dice(chat_id, emoji="🎲")
+            d3 = await bot.send_dice(chat_id, emoji="🎲")
             
+            # Chờ 4s để xúc sắc dừng hẳn
             await asyncio.sleep(4)
             
-            dice1 = dice1_msg.dice.value
-            dice2 = dice2_msg.dice.value
-            dice3 = dice3_msg.dice.value
-            total = dice1 + dice2 + dice3
-            result_tx = "tai" if total >= 11 else "xiu"
-            result_cl = "chan" if total % 2 == 0 else "le"
-            result_text_tx = "TÀI" if result_tx == "tai" else "XỈU"
-            result_text_cl = "CHẴN" if result_cl == "chan" else "LẺ"
-
-            total_bet_amount = 0
-            tai_total_amount = 0
-            xiu_total_amount = 0
-            chan_total_amount = 0
-            le_total_amount = 0
-            tai_count = 0
-            xiu_count = 0
-            chan_count = 0
-            le_count = 0
-
-            winners = []
-            losers = []
-
-            for uid, bet_info in game_state["bets"].items():
-                amount = bet_info["amount"]
-                choice = bet_info["choice"]
-                total_bet_amount += amount
-                
-                if choice == "tai":
-                    tai_total_amount += amount
-                    tai_count += 1
-                elif choice == "xiu":
-                    xiu_total_amount += amount
-                    xiu_count += 1
-                elif choice == "chan":
-                    chan_total_amount += amount
-                    chan_count += 1
-                elif choice == "le":
-                    le_total_amount += amount
-                    le_count += 1
-                
-                is_win = False
-                if choice == "tai" and result_tx == "tai":
-                    is_win = True
-                elif choice == "xiu" and result_tx == "xiu":
-                    is_win = True
-                elif choice == "chan" and result_cl == "chan":
-                    is_win = True
-                elif choice == "le" and result_cl == "le":
-                    is_win = True
-                
-                if is_win:
-                    win_amount = int(amount * 1.95)
-                    add_money(uid, win_amount, f"Thắng Tài Xỉu nhóm: {choice.upper()}")
-                    winners.append((uid, amount, win_amount, choice))
-                else:
-                    losers.append((uid, amount, choice))
-
-            try:
-                await bot.delete_message(chat_id, game_state["message_id"])
-            except:
-                pass
-
-            result_message = (
-                f"🎲 **Kết quả Phiên** 🎲\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"**{dice1}  {dice2}  {dice3}**  ({total}) **{result_text_tx} {result_text_cl}**\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📊 **CHI TIẾT CƯỢC THEO CỬA:**\n"
-                f"┌─────────────────────────────────┐\n"
-                f"│ 🎲 TÀI   : `{tai_total_amount:>12,}đ`  ({tai_count} người) │\n"
-                f"│ 🎲 XỈU   : `{xiu_total_amount:>12,}đ`  ({xiu_count} người) │\n"
-                f"│ 🔴 CHẴN  : `{chan_total_amount:>12,}đ`  ({chan_count} người) │\n"
-                f"│ ⚪ LẺ    : `{le_total_amount:>12,}đ`  ({le_count} người) │\n"
-                f"└─────────────────────────────────┘\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"💰 **Tổng cược:** `{total_bet_amount:,}đ`\n"
-                f"👥 **Tổng người chơi:** `{len(game_state['bets'])}`\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-            )
-
-            if winners:
-                result_message += f"\n🎉 **NGƯỜI THẮNG ({len(winners)}):**\n"
-                for uid, bet, win, ch in winners[:10]:
-                    result_message += f"  👤 ID `{uid}`: {ch.upper()} +`{win:,}đ`\n"
-                if len(winners) > 10:
-                    result_message += f"  ... và {len(winners) - 10} người khác\n"
-
-            if losers:
-                result_message += f"\n💀 **NGƯỜI THUA ({len(losers)}):**\n"
-                for uid, bet, ch in losers[:10]:
-                    result_message += f"  👤 ID `{uid}`: {ch.upper()} -`{bet:,}đ`\n"
-                if len(losers) > 10:
-                    result_message += f"  ... và {len(losers) - 10} người khác\n"
-
-            result_message += f"\n━━━━━━━━━━━━━━━━━━━━━\n⏱️ Ván tiếp theo sau `{DEFAULT_CYCLE_TIME}s`..."
+            v1, v2, v3 = d1.dice.value, d2.dice.value, d3.dice.value
+            total = v1 + v2 + v3
+            res_tx = "tai" if total >= 11 else "xiu"
+            res_cl = "chan" if total % 2 == 0 else "le"
             
-            await bot.send_message(chat_id, result_message, parse_mode="Markdown")
-            await bot.send_message(chat_id, "🔓 **CHAT ĐÃ ĐƯỢC MỞ!**\n━━━━━━━━━━━━━━━━━━━━━\n🎲 Ván mới bắt đầu!\nHãy đặt cược ngay!", parse_mode="Markdown")
+            total_win = 0
+            total_lose = 0
+            win_list = []
+            lose_list = []
 
+            for uid, bet in game_state["bets"].items():
+                amt = bet["amount"]
+                choice = bet["choice"]
+                u_name = bet.get("name", f"ID {uid}")
+                
+                is_win = (choice == "tai" and res_tx == "tai") or \
+                         (choice == "xiu" and res_tx == "xiu") or \
+                         (choice == "chan" and res_cl == "chan") or \
+                         (choice == "le" and res_cl == "le")
+
+                if is_win:
+                    win_amt = int(amt * 1.95)
+                    add_money(uid, win_amt, f"Thắng Tài Xỉu")
+                    total_win += win_amt
+                    win_list.append(f"✅ {u_name}: {choice.upper()} +`{win_amt:,}đ`")
+                else:
+                    total_lose += amt
+                    lose_list.append(f"❌ {u_name}: {choice.upper()} -`{amt:,}đ`")
+
+            # 4. Gửi bảng kết quả (Sẽ xuất hiện DƯỚI xúc sắc)
+            final_msg = (
+                f"🎲 **KẾT QUẢ PHIÊN** 🎲\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"✨ Kết quả: **{v1} - {v2} - {v3}** (Tổng: `{total}`)\n"
+                f"🏆 Cửa thắng: **{res_tx.upper()} - {res_cl.upper()}**\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📈 **DANH SÁCH THẮNG:**\n"
+                + (("\n".join(win_list)) if win_list else "  (Không có)") + "\n\n"
+                f"📉 **DANH SÁCH THUA:**\n"
+                + (("\n".join(lose_list)) if lose_list else "  (Không có)") + "\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💰 **TỔNG THẮNG:** `+{total_win:,}đ`\n"
+                f"💀 **TỔNG THUA:** `-{total_lose:,}đ`\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🔓 **MỞ KHÓA CHAT!** Ván mới bắt đầu sau 10s."
+            )
+            
+            await bot.send_message(chat_id, final_msg, parse_mode="Markdown")
+            
             group_games.pop(group_id, None)
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
         except Exception as e:
-            print(f"❌ Lỗi trong chu kỳ game của nhóm {group_id}: {e}")
-            import traceback
-            traceback.print_exc()
-            await asyncio.sleep(10)
+            print(f"Lỗi: {e}")
+            await asyncio.sleep(5)
 
 async def place_bet_in_group(bot, user_id: int, group_id: int, choice: str, amount: int, username: str = ""):
     if not check_bank_linked(user_id):
