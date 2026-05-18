@@ -248,14 +248,14 @@ def gen_code():
 TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-ADMIN_IDS = [8619503816,5260138362,6886009942]
+ADMIN_IDS = [8619503816]
 BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 50000 
 LOG_GROUP_ID = -1003663678808
 
-BANK_ID = "TCB"
-ACCOUNT_NO = "7980118386"
-ACCOUNT_NAME = "LE TRUNG HIEU"
+BANK_ID = "MB"
+ACCOUNT_NO = "0003456712345"
+ACCOUNT_NAME = "LY THI CHAM"
 
 def get_deposit_info(user_id):
     qr_url = f"https://img.vietqr.io/image/{BANK_ID}-{ACCOUNT_NO}-qr_only.png?amount=0&addInfo={user_id}&accountName={ACCOUNT_NAME}"
