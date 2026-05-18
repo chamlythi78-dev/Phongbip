@@ -261,7 +261,7 @@ def get_deposit_info(user_id):
     qr_url = f"https://img.vietqr.io/image/{BANK_ID}-{ACCOUNT_NO}-qr_only.png?amount=0&addInfo={user_id}&accountName={ACCOUNT_NAME}"
     caption = (
         "**🏦 THÔNG TIN NẠP TIỀN**\n\n"
-        f"🏦 Ngân hàng: **TECHCOMBANK**\n"
+        f"🏦 Ngân hàng: **MBBANK**\n"
         f"👤 CTK: **{ACCOUNT_NAME}**\n"
         f"💳 STK: `{ACCOUNT_NO}`\n"
         f"📝 Nội dung: `{user_id}`\n\n"
@@ -3498,11 +3498,11 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     f"• 🎯 Tương tác trong nhóm để nhận code top tuần\n"
                     f"• 🎁 Tham gia các sự kiện đặc biệt\n"
                     f"━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📞 **CSKH1:** @sakuri0\n"
+                    f"📞 **CSKH1:** @RoGarden\n"
                     f"📞 **CSKH2:** @RoGarden"
                 )
                 kb = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📞 CSKH1", url="https://t.me/sakuri0"),
+                    [InlineKeyboardButton("📞 CSKH1", url="https://t.me/RoGarden "),
                      InlineKeyboardButton("📞 CSKH2", url="https://t.me/RoGarden")]
                 ])
                 return await update.message.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
@@ -3589,7 +3589,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if txt == "📜 LỊCH SỬ":
         return await history_pro(update, ctx)
     if txt == "📞 HỖ TRỢ CSKH1":
-        msg = ("📞 **HỖ TRỢ KHÁCH HÀNG 1**\n\n👤 **CSKH1:** @sakuri0\n💬 Phản hồi trong giờ hành chính!\n━━━━━━━━━━━━━━━━━━━━━\n📌 **Các vấn đề có thể liên hệ:**\n• Nạp tiền chậm\n• Rút tiền chưa được duyệt\n• Khiếu nại kết quả game\n• Nhận CODE tân thủ\n• Nhận khuyến mãi nạp")
+        msg = ("📞 **HỖ TRỢ KHÁCH HÀNG 1**\n\n👤 **CSKH1:** @RoGarden\n💬 Phản hồi trong giờ hành chính!\n━━━━━━━━━━━━━━━━━━━━━\n📌 **Các vấn đề có thể liên hệ:**\n• Nạp tiền chậm\n• Rút tiền chưa được duyệt\n• Khiếu nại kết quả game\n• Nhận CODE tân thủ\n• Nhận khuyến mãi nạp")
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 NHẮN CSKH1", url="https://t.me/sakuri0")]])
         return await user_reply.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
     if txt == "📞 HỖ TRỢ CSKH2":
