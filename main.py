@@ -4547,7 +4547,7 @@ if application.job_queue:
 application.add_handler(CallbackQueryHandler(handle_callback))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_group_message))
 
-GROUP_IDS = [-1003663678808]
+GROUP_IDS = [-1003742179231 ]
 
 async def main():
     global _bot_instance
