@@ -251,7 +251,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 ADMIN_IDS = [8619503816,7857144049]
 BOT_USERNAME = "zen88uytins1bot" 
 MIN_WITHDRAW = 50000 
-LOG_GROUP_ID = -1003742179231
+LOG_GROUP_ID = -1003663678808
 
 BANK_ID = "MB"
 ACCOUNT_NO = "0003456712345"
@@ -4547,7 +4547,7 @@ if application.job_queue:
 application.add_handler(CallbackQueryHandler(handle_callback))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_group_message))
 
-GROUP_IDS = [-1003742179231 ]
+GROUP_IDS = [-1003663678808  ]
 
 async def main():
     global _bot_instance
