@@ -35,15 +35,15 @@ BOT_USERNAME = "loc88gamebot"
 ROOM_LINK = "https://t.me/LOC88sanhu"
 MIN_WITHDRAW = 50000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
-LOG_GROUP_ID = -1004375247819
+LOG_GROUP_ID = -1004461090575
 
 # THÔNG TIN NGÂN HÀNG MỚI
-BANK_ID = "VIB"
-ACCOUNT_NO = "095315785"
-ACCOUNT_NAME = "DUONG THI HAI YEN"
+BANK_ID = "VTB"
+ACCOUNT_NO = "100886797711"
+ACCOUNT_NAME = "Tran Dang Hoang"
 
 _bot_instance = None
-GROUP_IDS = [-1004375247819]
+GROUP_IDS = [-1004461090575]
 
 group_games = {}
 room_betting_enabled = {}
