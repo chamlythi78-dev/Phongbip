@@ -28,7 +28,7 @@ from aiohttp import web
 # ============================================================
 TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
-SEPAY_API_KEY = os.getenv("SEPAY_API_KEY", "")  # Bắt buộc cấu hình bằng biến môi trường; không hardcode khóa bí mật
+SEPAY_API_KEY = (os.getenv("SEPAY_API_KEY", "") or "").strip().strip('"').strip("'").strip()  # Bắt buộc cấu hình bằng biến môi trường; không hardcode khóa bí mật
 
 ADMIN_IDS = [5633649201, 7884394252, 7514060311]
 BOT_USERNAME = "loc88game_bot"
@@ -7262,6 +7262,7 @@ async def sepay_webhook(request):
         print("SePay Webhook: CHƯA đặt biến môi trường SEPAY_API_KEY trên server -> từ chối mọi webhook")
         return web.Response(status=401, text="SEPAY_API_KEY not configured")
     if not given_key or not hmac.compare_digest(given_key, SEPAY_API_KEY):
+        print(f"SePay DEBUG key: nhận len={len(given_key)} đuôi={given_key[-4:]!r} | server len={len(SEPAY_API_KEY)} đuôi={SEPAY_API_KEY[-4:]!r}")
         print(f"SePay Webhook: Sai API key (header nhận được: {auth_header[:12]}...)")
         return web.Response(status=401, text="Unauthorized")
 
