@@ -35,7 +35,7 @@ BOT_USERNAME = "loc88game_bot"
 ROOM_LINK = "https://t.me/LOC88sanhu"
 MIN_WITHDRAW = 50000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
-LOG_GROUP_ID = -1004375247819
+LOG_GROUP_ID = -1004461090575
 
 # THÔNG TIN NGÂN HÀNG MỚI
 BANK_ID = "ICB"
@@ -43,7 +43,7 @@ ACCOUNT_NO = "100886797711"
 ACCOUNT_NAME = "TRAN DANG HOANG"
 
 _bot_instance = None
-GROUP_IDS = [-1004375247819]
+GROUP_IDS = [-1004461090575]
 
 group_games = {}
 room_betting_enabled = {}
@@ -1149,7 +1149,7 @@ PREFIX_WORDS = [
 
 def generate_transfer_content(user_id):
     prefix = random.choice(PREFIX_WORDS)
-    return f"{prefix} {user_id}".lower()
+    return f"SEVQR {prefix} {user_id}".upper()
 
 def get_deposit_info(user_id, amount=0):
     content = generate_transfer_content(user_id)
