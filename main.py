@@ -31,7 +31,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 SEPAY_API_KEY = os.getenv("SEPAY_API_KEY", "")  # Bắt buộc cấu hình bằng biến môi trường; không hardcode khóa bí mật
 
 ADMIN_IDS = [5633649201, 7884394252, 7514060311]
-BOT_USERNAME = "loc88gamebot"
+BOT_USERNAME = "loc88game_bot"
 ROOM_LINK = "https://t.me/LOC88sanhu"
 MIN_WITHDRAW = 50000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
