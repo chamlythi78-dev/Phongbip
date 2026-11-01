@@ -30,17 +30,17 @@ TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 SEPAY_API_KEY = os.getenv("SEPAY_API_KEY", "")  # Bắt buộc cấu hình bằng biến môi trường; không hardcode khóa bí mật
 
-ADMIN_IDS = [5633649201, 7884394252, 7514060311]
-BOT_USERNAME = "loc88gamebot"
-ROOM_LINK = "https://t.me/LOC88sanhu"
+ADMIN_IDS = [5633649201, 7884394252]
+BOT_USERNAME = "Jav88gamebot"
+ROOM_LINK = "https://t.me/jav88sanhu"
 MIN_WITHDRAW = 50000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
 LOG_GROUP_ID = -1004375247819
 
 # THÔNG TIN NGÂN HÀNG MỚI
-BANK_ID = "VIB"
-ACCOUNT_NO = "095315785"
-ACCOUNT_NAME = "DUONG THI HAI YEN"
+BANK_ID = "BIDV"
+ACCOUNT_NO = "96247NS9NH"
+ACCOUNT_NAME = "TU NGOC LOI"
 
 _bot_instance = None
 GROUP_IDS = [-1004375247819]
@@ -1158,7 +1158,7 @@ def get_deposit_info(user_id, amount=0):
     
     caption = (
         f'{ce("💳")} <b>THÔNG TIN NẠP TIỀN</b>\n\n'
-        f'{ce("🏦")} Ngân hàng: <b>VIB</b>\n'
+        f'{ce("🏦")} Ngân hàng: <b>BIDV</b>\n'
         f'{ce("👤")} CTK: <b>{ACCOUNT_NAME}</b>\n'
         f'{ce("💰")} STK: <code>{ACCOUNT_NO}</code>\n'
         f'{ce("✍️")} Nội dung: <code>{content}</code>\n'
@@ -2013,13 +2013,13 @@ async def sethoancuoc_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ===== GIFTCODE 5 LOẠI ================================
 # ============================================================
 GIFT_TYPES = {
-    "TANTHU":  {"name": "Code Tân Thủ",  "icon": "🎁", "fmt": "LOC88-TANTHU-xxxxxxx"},
-    "CODEMUA": {"name": "Code Mua",      "icon": "🛒", "fmt": "LOC88-CODEMUA-xxxxxxx"},
-    "GIOVANG": {"name": "Code Giờ Vàng", "icon": "⏰", "fmt": "LOC88-GIOVANG-xxxxxxx"},
-    "NAP":     {"name": "Code Nạp",      "icon": "💳", "fmt": "LOC88-1234567-ABCDEFG"},
-    "TRIAN":   {"name": "Code Tri Ân",   "icon": "🎉", "fmt": "LOC88-TRIAN-xxxxxxx"},
-    "TICHLUY": {"name": "Code Tích Lũy", "icon": "🏆", "fmt": "LOC88-TICHLUY-xxxxxxx"},
-    "INTERACT": {"name": "Code Tương Tác", "icon": "💬", "fmt": "LOC88-INTERACT-xxxxxxx"},
+    "TANTHU":  {"name": "Code Tân Thủ",  "icon": "🎁", "fmt": "JAV88-TANTHU-xxxxxxx"},
+    "CODEMUA": {"name": "Code Mua",      "icon": "🛒", "fmt": "JAV88-CODEMUA-xxxxxxx"},
+    "GIOVANG": {"name": "Code Giờ Vàng", "icon": "⏰", "fmt": "JAV88-GIOVANG-xxxxxxx"},
+    "NAP":     {"name": "Code Nạp",      "icon": "💳", "fmt": "JAV88-1234567-ABCDEFG"},
+    "TRIAN":   {"name": "Code Tri Ân",   "icon": "🎉", "fmt": "JAV88-TRIAN-xxxxxxx"},
+    "TICHLUY": {"name": "Code Tích Lũy", "icon": "🏆", "fmt": "JAV88-TICHLUY-xxxxxxx"},
+    "INTERACT": {"name": "Code Tương Tác", "icon": "💬", "fmt": "JAV88-INTERACT-xxxxxxx"},
 }
 GIFT_BUY_EXPIRE_DAYS = 30
 _DIGITS = "0123456789"
@@ -2032,9 +2032,9 @@ def _rand(chars, n):
 def gen_gift_code(ctype):
     while True:
         if ctype == "NAP":
-            code = f"LOC88-{_rand(_DIGITS, 7)}-{_rand(_LETTERS, 7)}"
+            code = f"JAV88-{_rand(_DIGITS, 7)}-{_rand(_LETTERS, 7)}"
         else:
-            code = f"LOC88-{ctype}-{_rand(_ALNUM, 7)}"
+            code = f"JAV88-{ctype}-{_rand(_ALNUM, 7)}"
         if not query("SELECT 1 FROM giftcodes WHERE code=%s", (code,)):
             return code
 
@@ -2858,7 +2858,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 try:
                     new_stats_msg = await bot.send_message(chat_id, stats_text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([
                         [btn('NẠP TIỀN TẠI ĐÂY', '💰', url=f'https://t.me/{BOT_USERNAME}?start=nap')],
-                        [btn('BOT CHƠI GAME', '🎮', url='https://t.me/LOC88gamebot')],
+                        [btn('BOT CHƠI GAME', '🎮', url='https://t.me/Jav88gamebot')],
                         [btn('CHƠI TÀI XỈU 3D NGAY', '🎮', url=f'https://t.me/{BOT_USERNAME}?start=tx3d')]
                     ]))
                     stats_msg_id = new_stats_msg.message_id
@@ -4661,7 +4661,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_reply = update.effective_message
     key = re.sub(r'^[^\w]+', '', txt).strip()
 
-    if update.effective_chat.type == "private" and re.fullmatch(r'(?:LOC88|JAV88)-[A-Z0-9]+(?:-[A-Z0-9]+)?', txt.strip().upper()):
+    if update.effective_chat.type == "private" and re.fullmatch(r'JAV88-[A-Z0-9]+(?:-[A-Z0-9]+)?', txt.strip().upper()):
         code_in = txt.strip().upper()
         if await redeem_giftcode(update, uid, code_in):
             return
@@ -4690,7 +4690,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [btn("Nhận thưởng", "🎉", callback_data="acc_nhan_thuong"), btn("Chuyển tiền", "💸", callback_data="acc_chuyen_tien")],
             [btn("VIP", "👑", callback_data="acc_vip"), btn("Fan cứng +30k", "🔥", callback_data="acc_fan_cung")],
             [btn("Tích lũy nạp", "💎", callback_data="acc_tich_luy"), btn("Kết Sát", "🔐", callback_data="acc_ket_sat")],
-            [btn("Hỗ trợ", "🆘", url="https://t.me/loc88cskh247")]
+            [btn("Hỗ trợ", "🆘", url="https://t.me/dgfrutil")]
         ])
 
         msg = (
@@ -4786,7 +4786,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [btn("Mời đệ tử", "🧑‍🤝‍🧑", callback_data="ev_moi_de_tu")]
         ])
         return await user_reply.reply_text(
-            f'{ce("🎁")} <b>TRUNG TÂM EVENT LOC88</b>\nChọn chương trình bạn muốn xem hoặc nhận thưởng:',
+            f'{ce("🎁")} <b>TRUNG TÂM EVENT JAV88</b>\nChọn chương trình bạn muốn xem hoặc nhận thưởng:',
             reply_markup=kb, parse_mode=ParseMode.HTML)
 
     if key == "LỆNH":
@@ -7059,7 +7059,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if d.startswith("dep_"):
         if d == "dep_support":
             await q.answer()
-            return await q.message.reply_text(f'{ce("🔔")} <b>HỖ TRỢ NẠP TIỀN</b>\n\nVui lòng liên hệ Admin: @loc88cskh247\nHoặc dùng lệnh <code>/nap [số_tiền]</code> để tạo QR.', parse_mode=ParseMode.HTML)
+            return await q.message.reply_text(f'{ce("🔔")} <b>HỖ TRỢ NẠP TIỀN</b>\n\nVui lòng liên hệ Admin: @dgfrutil\nHoặc dùng lệnh <code>/nap [số_tiền]</code> để tạo QR.', parse_mode=ParseMode.HTML)
         try:
             await q.answer()
             amount = int(d.split("_")[1])
@@ -10093,10 +10093,10 @@ _ADM_CATS = [
         ("use", "taocode", "Tạo code thường", "x", "/taocode [số tiền] [lượt dùng]", "/taocode 10000 50"),
         ("use", "taocodeall", "Tạo nhiều code 1 lượt", "x", "/taocodeall [số tiền] [số lượng]", "/taocodeall 5000 20"),
         ("use", "xoacode", "Xoá code thường", "x", "/xoacode [mã]", "/xoacode ABC12345"),
-        ("use", "xoagift", "Xoá giftcode", "x", "/xoagift [mã]", "/xoagift LOC88-TANTHU-XXXXXXX"),
+        ("use", "xoagift", "Xoá giftcode", "x", "/xoagift [mã]", "/xoagift JAV88-TANTHU-XXXXXXX"),
         ("run", "dsnaphomnay", "Danh sách người đã nạp thành công hôm nay", "dsnaphomnay", None, None),
         ("use", "tangcodenap", "Tặng code thủ công cho người đã nạp", "x", "/tangcodenap [giá trị] [vòng cược] [hạn] [homnay|all|id1,id2] [nạp tối thiểu]", "/tangcodenap 20k 1 1n homnay"),
-        ("use", "yccode", "Thêm / gỡ yêu cầu nhập code (nạp trong ngày, tổng nạp)", "x", "/yccode [mã] nap|tongnap [số tiền] | off", "/yccode LOC88-TRIAN-ABC1234 nap 100k"),
+        ("use", "yccode", "Thêm / gỡ yêu cầu nhập code (nạp trong ngày, tổng nạp)", "x", "/yccode [mã] nap|tongnap [số tiền] | off", "/yccode JAV88-TRIAN-ABC1234 nap 100k"),
     ]),
     ("tk", "📊", "THỐNG KÊ & XUẤT FILE", "Thống kê hệ thống và xuất file Excel đẹp nhiều sheet.", [
         ("run", "thongke", "Bảng thống kê hôm nay / tháng / tổng", "thongke", None, None),
@@ -10130,7 +10130,7 @@ _ADM_CATS.append((
         ("use", "resetall", "Lệnh reset toàn bộ số dư (bí danh)", "x", "/resetall", "/resetall"),
         ("use", "xoalsall", "Xoá toàn bộ lịch sử", "x", "/xoalsall", "/xoalsall"),
         ("use", "xoals", "Xoá lịch sử một user", "x", "/xoals [ID]", "/xoals 123456789"),
-        ("use", "setname", "Đổi tên bot", "x", "/setname [tên mới]", "/setname LOC88"),
+        ("use", "setname", "Đổi tên bot", "x", "/setname [tên mới]", "/setname JAV88"),
         ("use", "kmnapvc", "Tặng khuyến mãi theo vòng cược", "x", "/kmnapvc [ID] [số tiền]", "/kmnapvc 123456789 20000"),
         ("use", "lsnap", "Lịch sử nạp của user", "x", "/lsnap [ID]", "/lsnap 123456789"),
         ("use", "lsrut", "Lịch sử rút của user", "x", "/lsrut [ID]", "/lsrut 123456789"),
@@ -10965,7 +10965,7 @@ async def yccode_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f'<code>/yccode [mã] tongnap [số tiền]</code> — phải có <b>tổng nạp</b> đủ mức này\n'
         f'<code>/yccode [mã] off</code> — gỡ toàn bộ yêu cầu\n'
         f'<code>/yccode [mã]</code> — xem yêu cầu hiện tại\n\n'
-        f'{ce("💡")} VD: <code>/yccode LOC88-TRIAN-ABC1234 nap 100k</code>')
+        f'{ce("💡")} VD: <code>/yccode JAV88-TRIAN-ABC1234 nap 100k</code>')
     if not args:
         return await msg.reply_text(usage, parse_mode=ParseMode.HTML)
     code = args[0].strip().upper()
