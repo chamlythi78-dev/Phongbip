@@ -35,15 +35,15 @@ BOT_USERNAME = "loc88gamebot"
 ROOM_LINK = "https://t.me/LOC88sanhu"
 MIN_WITHDRAW = 50000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
-LOG_GROUP_ID = -1004461090575
+LOG_GROUP_ID = -1004375247819
 
 # THÔNG TIN NGÂN HÀNG MỚI
-BANK_ID = "VTB"
+BANK_ID = "ICB"
 ACCOUNT_NO = "100886797711"
-ACCOUNT_NAME = "Tran Dang Hoang"
+ACCOUNT_NAME = "TRAN DANG HOANG"
 
 _bot_instance = None
-GROUP_IDS = [-1004461090575]
+GROUP_IDS = [-1004375247819]
 
 group_games = {}
 room_betting_enabled = {}
@@ -1158,7 +1158,7 @@ def get_deposit_info(user_id, amount=0):
     
     caption = (
         f'{ce("💳")} <b>THÔNG TIN NẠP TIỀN</b>\n\n'
-        f'{ce("🏦")} Ngân hàng: <b>VIB</b>\n'
+        f'{ce("🏦")} Ngân hàng: <b>VietinBank</b>\n'
         f'{ce("👤")} CTK: <b>{ACCOUNT_NAME}</b>\n'
         f'{ce("💰")} STK: <code>{ACCOUNT_NO}</code>\n'
         f'{ce("✍️")} Nội dung: <code>{content}</code>\n'
@@ -1195,7 +1195,7 @@ async def fetch_qr_image(qr_url: str) -> BytesIO:
 
 # ---- Tạo QR VietQR ngay trên server (không phụ thuộc img.vietqr.io) ----
 _BANK_BIN = {"MB": "970422", "MBBANK": "970422", "VCB": "970436", "TCB": "970407",
-             "ACB": "970416", "BIDV": "970418", "CTG": "970415", "VPB": "970432",
+             "ACB": "970416", "BIDV": "970418", "CTG": "970415", "ICB": "970415", "VPB": "970432",
              "TPB": "970423", "STB": "970403", "VIB": "970441", "OCB": "970448",
              "MSB": "970426", "SHB": "970443", "LPB": "970449", "HDB": "970437",
              "AGRIBANK": "970405", "SCB": "970429", "EIB": "970431", "SEAB": "970440",
@@ -2858,7 +2858,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 try:
                     new_stats_msg = await bot.send_message(chat_id, stats_text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([
                         [btn('NẠP TIỀN TẠI ĐÂY', '💰', url=f'https://t.me/{BOT_USERNAME}?start=nap')],
-                        [btn('BOT CHƠI GAME', '🎮', url='https://t.me/LOC88gamebot')],
+                        [btn('BOT CHƠI GAME', '🎮', url=f'https://t.me/{BOT_USERNAME}')],
                         [btn('CHƠI TÀI XỈU 3D NGAY', '🎮', url=f'https://t.me/{BOT_USERNAME}?start=tx3d')]
                     ]))
                     stats_msg_id = new_stats_msg.message_id
