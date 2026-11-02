@@ -30,19 +30,17 @@ TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 SEPAY_API_KEY = os.getenv("SEPAY_API_KEY", "")  # Bắt buộc cấu hình bằng biến môi trường; không hardcode khóa bí mật
 
-ADMIN_IDS = [5633649201, 7884394252]
-BOT_USERNAME = "Jav88sangamebot"
-SESSION_HISTORY_GROUP_ID = -1004491701518
-SESSION_HISTORY_URL = "https://t.me/lspjav88"
-ROOM_LINK = "https://t.me/jav88sanhu"
+ADMIN_IDS = [5633649201, 7884394252, 7514060311]
+BOT_USERNAME = "loc88game_bot"
+ROOM_LINK = "https://t.me/loc88dinhcao"
 MIN_WITHDRAW = 50000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
 LOG_GROUP_ID = -1004375247819
 
 # THÔNG TIN NGÂN HÀNG MỚI
-BANK_ID = "BIDV"
-ACCOUNT_NO = "96247MD0AQ"
-ACCOUNT_NAME = "NGUYEN KIM LONG"
+BANK_ID = "ICB"
+ACCOUNT_NO = "100886797711"
+ACCOUNT_NAME = "TRAN DANG HOANG"
 
 _bot_instance = None
 GROUP_IDS = [-1004375247819]
@@ -694,13 +692,6 @@ query("ALTER TABLE history ADD COLUMN IF NOT EXISTS bal_before BIGINT")
 query("ALTER TABLE history ADD COLUMN IF NOT EXISTS bal_after BIGINT")
 query("CREATE TABLE IF NOT EXISTS banned (user_id BIGINT PRIMARY KEY)")
 query("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
-try:
-    _session_counter_row = query("SELECT value FROM settings WHERE key='dice_session_counter'")
-    if not _session_counter_row:
-        query("INSERT INTO settings(key, value) VALUES('dice_session_counter', '0') ON CONFLICT (key) DO NOTHING")
-except Exception as _counter_init_error:
-    print(f"[session-counter] chưa khởi tạo được bộ đếm: {_counter_init_error}")
-
 query("CREATE TABLE IF NOT EXISTS welcome_bonus_log (user_id BIGINT PRIMARY KEY, amount BIGINT DEFAULT 0, created_at TEXT)")
 query("CREATE TABLE IF NOT EXISTS stats_bet_base (user_id BIGINT, day DATE, bet BIGINT DEFAULT 0, win BIGINT DEFAULT 0, PRIMARY KEY (user_id, day))")
 # Mốc reset hoàn trả theo từng người (scope: ngay | tuan). Doanh số hoàn trả = bet_daily - mốc này.
@@ -1167,7 +1158,7 @@ def get_deposit_info(user_id, amount=0):
     
     caption = (
         f'{ce("💳")} <b>THÔNG TIN NẠP TIỀN</b>\n\n'
-        f'{ce("🏦")} Ngân hàng: <b>BIDV</b>\n'
+        f'{ce("🏦")} Ngân hàng: <b>VietinBank</b>\n'
         f'{ce("👤")} CTK: <b>{ACCOUNT_NAME}</b>\n'
         f'{ce("💰")} STK: <code>{ACCOUNT_NO}</code>\n'
         f'{ce("✍️")} Nội dung: <code>{content}</code>\n'
@@ -1204,7 +1195,7 @@ async def fetch_qr_image(qr_url: str) -> BytesIO:
 
 # ---- Tạo QR VietQR ngay trên server (không phụ thuộc img.vietqr.io) ----
 _BANK_BIN = {"MB": "970422", "MBBANK": "970422", "VCB": "970436", "TCB": "970407",
-             "ACB": "970416", "BIDV": "970418", "CTG": "970415", "VPB": "970432",
+             "ACB": "970416", "BIDV": "970418", "CTG": "970415", "ICB": "970415", "VPB": "970432",
              "TPB": "970423", "STB": "970403", "VIB": "970441", "OCB": "970448",
              "MSB": "970426", "SHB": "970443", "LPB": "970449", "HDB": "970437",
              "AGRIBANK": "970405", "SCB": "970429", "EIB": "970431", "SEAB": "970440",
@@ -2022,13 +2013,13 @@ async def sethoancuoc_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ===== GIFTCODE 5 LOẠI ================================
 # ============================================================
 GIFT_TYPES = {
-    "TANTHU":  {"name": "Code Tân Thủ",  "icon": "🎁", "fmt": "JAV88-TANTHU-xxxxxxx"},
-    "CODEMUA": {"name": "Code Mua",      "icon": "🛒", "fmt": "JAV88-CODEMUA-xxxxxxx"},
-    "GIOVANG": {"name": "Code Giờ Vàng", "icon": "⏰", "fmt": "JAV88-GIOVANG-xxxxxxx"},
-    "NAP":     {"name": "Code Nạp",      "icon": "💳", "fmt": "JAV88-1234567-ABCDEFG"},
-    "TRIAN":   {"name": "Code Tri Ân",   "icon": "🎉", "fmt": "JAV88-TRIAN-xxxxxxx"},
-    "TICHLUY": {"name": "Code Tích Lũy", "icon": "🏆", "fmt": "JAV88-TICHLUY-xxxxxxx"},
-    "INTERACT": {"name": "Code Tương Tác", "icon": "💬", "fmt": "JAV88-INTERACT-xxxxxxx"},
+    "TANTHU":  {"name": "Code Tân Thủ",  "icon": "🎁", "fmt": "LOC88-TANTHU-xxxxxxx"},
+    "CODEMUA": {"name": "Code Mua",      "icon": "🛒", "fmt": "LOC88-CODEMUA-xxxxxxx"},
+    "GIOVANG": {"name": "Code Giờ Vàng", "icon": "⏰", "fmt": "LOC88-GIOVANG-xxxxxxx"},
+    "NAP":     {"name": "Code Nạp",      "icon": "💳", "fmt": "LOC88-1234567-ABCDEFG"},
+    "TRIAN":   {"name": "Code Tri Ân",   "icon": "🎉", "fmt": "LOC88-TRIAN-xxxxxxx"},
+    "TICHLUY": {"name": "Code Tích Lũy", "icon": "🏆", "fmt": "LOC88-TICHLUY-xxxxxxx"},
+    "INTERACT": {"name": "Code Tương Tác", "icon": "💬", "fmt": "LOC88-INTERACT-xxxxxxx"},
 }
 GIFT_BUY_EXPIRE_DAYS = 30
 _DIGITS = "0123456789"
@@ -2041,9 +2032,9 @@ def _rand(chars, n):
 def gen_gift_code(ctype):
     while True:
         if ctype == "NAP":
-            code = f"JAV88-{_rand(_DIGITS, 7)}-{_rand(_LETTERS, 7)}"
+            code = f"LOC88-{_rand(_DIGITS, 7)}-{_rand(_LETTERS, 7)}"
         else:
-            code = f"JAV88-{ctype}-{_rand(_ALNUM, 7)}"
+            code = f"LOC88-{ctype}-{_rand(_ALNUM, 7)}"
         if not query("SELECT 1 FROM giftcodes WHERE code=%s", (code,)):
             return code
 
@@ -2763,14 +2754,8 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 await asyncio.sleep(10)
                 continue
 
-            # Bộ đếm phiên lưu trong PostgreSQL để không quay về #1 khi sửa/redeploy bot.
-            try:
-                saved_counter = int(get_setting("dice_session_counter", "0") or 0)
-            except (TypeError, ValueError):
-                saved_counter = 0
-            SESSION_COUNTER["value"] = max(int(SESSION_COUNTER.get("value", 0)), saved_counter) + 1
+            SESSION_COUNTER["value"] += 1
             session_id = SESSION_COUNTER["value"]
-            set_setting("dice_session_counter", session_id)
 
             game_state = {
                 "status": "betting",
@@ -2800,12 +2785,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
             )
 
             try:
-                await bot.send_message(
-                    chat_id, start_text, parse_mode=ParseMode.HTML,
-                    reply_markup=InlineKeyboardMarkup([[
-                        btn("LỊCH SỬ PHIÊN", "📊", url=SESSION_HISTORY_URL)
-                    ]])
-                )
+                await bot.send_message(chat_id, start_text, parse_mode=ParseMode.HTML)
             except Exception as e:
                 print(f"Lỗi gửi tin nhắn bắt đầu phiên: {e}")
                 await asyncio.sleep(5)
@@ -2878,9 +2858,8 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 try:
                     new_stats_msg = await bot.send_message(chat_id, stats_text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([
                         [btn('NẠP TIỀN TẠI ĐÂY', '💰', url=f'https://t.me/{BOT_USERNAME}?start=nap')],
-                        [btn('BOT CHƠI GAME', '🎮', url='https://t.me/Jav88sangamebot')],
-                        [btn('CHƠI TÀI XỈU 3D NGAY', '🎮', url=f'https://t.me/{BOT_USERNAME}?start=tx3d')],
-                        [btn('LỊCH SỬ PHIÊN', '📊', url=SESSION_HISTORY_URL)]
+                        [btn('BOT CHƠI GAME', '🎮', url=f'https://t.me/{BOT_USERNAME}')],
+                        [btn('CHƠI TÀI XỈU 3D NGAY', '🎮', url=f'https://t.me/{BOT_USERNAME}?start=tx3d')]
                     ]))
                     stats_msg_id = new_stats_msg.message_id
                 except Exception as e:
@@ -3049,21 +3028,28 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 cau_tx += "🔵" if h['tx'] == "tai" else "🔴"
                 cau_cl += "⚪️" if h['cl'] == "chan" else "⚫️"
 
+            total_bet_amount = sum(int(b.get("amount", 0)) for b in game_state["bets"].values())
+            # Bố cục tổng kết theo mẫu: ba viên xúc xắc, tổng điểm, hai loại kết quả,
+            # thống kê tiền và cầu 10 phiên gần nhất.
             final_msg = (
-                f'{ce("📊")} <b>Kết quả Phiên #{session_id}</b>\n'
-                f'┏━━━━━━━━━━━━━\n'
-                f'┃ {dice_str} {ce("➡️")} {total} {result_text} {result_icons}\n'
+                f'{ce("🌟")} <b>Kết quả phiên #{session_id}</b>\n'
+                f'┏━━━━━━━━━━━━━━\n'
+                f'┃{ce("😃")}  {ce("🌟")} <b>{dice_values[0]}</b>\n'
+                f'┃{ce("😃")}  {ce("🌟")} <b>{dice_values[1]}</b>\n'
+                f'┃{ce("😃")}  {ce("🌟")} <b>{dice_values[2]}</b>\n'
+                f'┃{ce("🧮")} Tổng điểm：{ce("🌟")} <b>{total}</b>\n'
+                f'┃{ce("🔴")} Tài/Xỉu：<b>{"Tài" if res_tx == "tai" else "Xỉu"}</b>\n'
+                f'┃{ce("⚫️")} Chẵn/Lẻ：<b>{"Chẵn" if res_cl == "chan" else "Lẻ"}</b>\n'
                 f'┃\n'
-                f'┃ {ce("💰")} Tổng thắng: {fmt_money(total_win)}\n'
-                f'┃ {ce("❌")} Tổng thua: {fmt_money(total_lose)}\n'
-                f'┃\n'
-                f'┃ {ce("🎁")} Hũ hiện tại: {fmt_money(jackpot_amount)}đ\n'
-                f'┗━━━━━━━━━━━━━\n'
-                f'<b>Cầu gần đây:</b>\n'
+                f'┃{ce("💰")} Tổng cược：<b>{fmt_money(total_bet_amount)}</b>\n'
+                f'┃{ce("💸")} Tổng thắng：<b>{fmt_money(total_win)}</b>\n'
+                f'┃{ce("🤑")} Tổng thua：<b>{fmt_money(total_lose)}</b>\n'
+                f'┃{ce("🪙")} Cộng hũ：<b>+{fmt_money(jackpot_contribution)}</b>\n'
+                f'┃{ce("🏆")} Hũ hiện tại：<b>{fmt_money(jackpot_amount)}</b>\n'
+                f'┗━━━━━━━━━━━━━━\n\n'
+                f'{ce("🕯")} <b>10 phiên gần nhất</b>\n'
                 f'{cau_tx if cau_tx else "Chưa có"}\n'
-                f'      🔵  Tài             🔴  XỈU\n'
-                f'{cau_cl if cau_cl else "Chưa có"}\n'
-                f'      ⚪️  Chẵn        ⚫️  Lẻ.'
+                f'{cau_cl if cau_cl else "Chưa có"}'
             )
 
             if jackpot_winners:
@@ -3081,33 +3067,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
             except Exception as e:
                 print(f"Lỗi mở khóa chat: {e}")
 
-            await bot.send_message(
-                chat_id, final_msg, parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup([[
-                    btn("LỊCH SỬ PHIÊN", "📊", url=SESSION_HISTORY_URL)
-                ]])
-            )
-            # Gửi kết quả từng phiên sang nhóm lưu lịch sử.
-            try:
-                history_post = (
-                    f'{ce("📊")} <b>LỊCH SỬ PHIÊN #{session_id}</b>\n'
-                    f'━━━━━━━━━━━━━━━━━━\n'
-                    f'{ce("🎲")} Kết quả xúc xắc: <b>{dice_str}</b>\n'
-                    f'{ce("💯")} Tổng điểm: <b>{total}</b>\n'
-                    f'{ce("🏆")} Kết quả: <b>{html.escape(result_text)}</b>\n'
-                    f'{ce("💰")} Tổng tiền thắng: <b>{fmt_money(total_win)}đ</b>\n'
-                    f'{ce("📉")} Tổng tiền thua: <b>{fmt_money(total_lose)}đ</b>\n'
-                    f'━━━━━━━━━━━━━━━━━━'
-                )
-                await bot.send_message(
-                    SESSION_HISTORY_GROUP_ID, history_post,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=InlineKeyboardMarkup([[
-                        btn("LỊCH SỬ PHIÊN", "📊", url=SESSION_HISTORY_URL)
-                    ]])
-                )
-            except Exception as history_error:
-                print(f"[session-history] không gửi được phiên #{session_id}: {history_error}")
+            await bot.send_message(chat_id, final_msg, parse_mode=ParseMode.HTML)
             group_games.pop(group_id, None)
             await asyncio.sleep(10)
 
@@ -4708,7 +4668,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_reply = update.effective_message
     key = re.sub(r'^[^\w]+', '', txt).strip()
 
-    if update.effective_chat.type == "private" and re.fullmatch(r'JAV88-[A-Z0-9]+(?:-[A-Z0-9]+)?', txt.strip().upper()):
+    if update.effective_chat.type == "private" and re.fullmatch(r'(?:LOC88|JAV88)-[A-Z0-9]+(?:-[A-Z0-9]+)?', txt.strip().upper()):
         code_in = txt.strip().upper()
         if await redeem_giftcode(update, uid, code_in):
             return
@@ -4737,7 +4697,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [btn("Nhận thưởng", "🎉", callback_data="acc_nhan_thuong"), btn("Chuyển tiền", "💸", callback_data="acc_chuyen_tien")],
             [btn("VIP", "👑", callback_data="acc_vip"), btn("Fan cứng +30k", "🔥", callback_data="acc_fan_cung")],
             [btn("Tích lũy nạp", "💎", callback_data="acc_tich_luy"), btn("Kết Sát", "🔐", callback_data="acc_ket_sat")],
-            [btn("Hỗ trợ", "🆘", url="https://t.me/dgfrutil")]
+            [btn("Hỗ trợ", "🆘", url="https://t.me/loc88cskh247")]
         ])
 
         msg = (
@@ -4833,7 +4793,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [btn("Mời đệ tử", "🧑‍🤝‍🧑", callback_data="ev_moi_de_tu")]
         ])
         return await user_reply.reply_text(
-            f'{ce("🎁")} <b>TRUNG TÂM EVENT JAV88</b>\nChọn chương trình bạn muốn xem hoặc nhận thưởng:',
+            f'{ce("🎁")} <b>TRUNG TÂM EVENT LOC88</b>\nChọn chương trình bạn muốn xem hoặc nhận thưởng:',
             reply_markup=kb, parse_mode=ParseMode.HTML)
 
     if key == "LỆNH":
@@ -7106,7 +7066,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if d.startswith("dep_"):
         if d == "dep_support":
             await q.answer()
-            return await q.message.reply_text(f'{ce("🔔")} <b>HỖ TRỢ NẠP TIỀN</b>\n\nVui lòng liên hệ Admin: @dgfrutil\nHoặc dùng lệnh <code>/nap [số_tiền]</code> để tạo QR.', parse_mode=ParseMode.HTML)
+            return await q.message.reply_text(f'{ce("🔔")} <b>HỖ TRỢ NẠP TIỀN</b>\n\nVui lòng liên hệ Admin: @loc88cskh247\nHoặc dùng lệnh <code>/nap [số_tiền]</code> để tạo QR.', parse_mode=ParseMode.HTML)
         try:
             await q.answer()
             amount = int(d.split("_")[1])
@@ -10140,10 +10100,10 @@ _ADM_CATS = [
         ("use", "taocode", "Tạo code thường", "x", "/taocode [số tiền] [lượt dùng]", "/taocode 10000 50"),
         ("use", "taocodeall", "Tạo nhiều code 1 lượt", "x", "/taocodeall [số tiền] [số lượng]", "/taocodeall 5000 20"),
         ("use", "xoacode", "Xoá code thường", "x", "/xoacode [mã]", "/xoacode ABC12345"),
-        ("use", "xoagift", "Xoá giftcode", "x", "/xoagift [mã]", "/xoagift JAV88-TANTHU-XXXXXXX"),
+        ("use", "xoagift", "Xoá giftcode", "x", "/xoagift [mã]", "/xoagift LOC88-TANTHU-XXXXXXX"),
         ("run", "dsnaphomnay", "Danh sách người đã nạp thành công hôm nay", "dsnaphomnay", None, None),
         ("use", "tangcodenap", "Tặng code thủ công cho người đã nạp", "x", "/tangcodenap [giá trị] [vòng cược] [hạn] [homnay|all|id1,id2] [nạp tối thiểu]", "/tangcodenap 20k 1 1n homnay"),
-        ("use", "yccode", "Thêm / gỡ yêu cầu nhập code (nạp trong ngày, tổng nạp)", "x", "/yccode [mã] nap|tongnap [số tiền] | off", "/yccode JAV88-TRIAN-ABC1234 nap 100k"),
+        ("use", "yccode", "Thêm / gỡ yêu cầu nhập code (nạp trong ngày, tổng nạp)", "x", "/yccode [mã] nap|tongnap [số tiền] | off", "/yccode LOC88-TRIAN-ABC1234 nap 100k"),
     ]),
     ("tk", "📊", "THỐNG KÊ & XUẤT FILE", "Thống kê hệ thống và xuất file Excel đẹp nhiều sheet.", [
         ("run", "thongke", "Bảng thống kê hôm nay / tháng / tổng", "thongke", None, None),
@@ -10177,7 +10137,7 @@ _ADM_CATS.append((
         ("use", "resetall", "Lệnh reset toàn bộ số dư (bí danh)", "x", "/resetall", "/resetall"),
         ("use", "xoalsall", "Xoá toàn bộ lịch sử", "x", "/xoalsall", "/xoalsall"),
         ("use", "xoals", "Xoá lịch sử một user", "x", "/xoals [ID]", "/xoals 123456789"),
-        ("use", "setname", "Đổi tên bot", "x", "/setname [tên mới]", "/setname JAV88"),
+        ("use", "setname", "Đổi tên bot", "x", "/setname [tên mới]", "/setname LOC88"),
         ("use", "kmnapvc", "Tặng khuyến mãi theo vòng cược", "x", "/kmnapvc [ID] [số tiền]", "/kmnapvc 123456789 20000"),
         ("use", "lsnap", "Lịch sử nạp của user", "x", "/lsnap [ID]", "/lsnap 123456789"),
         ("use", "lsrut", "Lịch sử rút của user", "x", "/lsrut [ID]", "/lsrut 123456789"),
@@ -11012,7 +10972,7 @@ async def yccode_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f'<code>/yccode [mã] tongnap [số tiền]</code> — phải có <b>tổng nạp</b> đủ mức này\n'
         f'<code>/yccode [mã] off</code> — gỡ toàn bộ yêu cầu\n'
         f'<code>/yccode [mã]</code> — xem yêu cầu hiện tại\n\n'
-        f'{ce("💡")} VD: <code>/yccode JAV88-TRIAN-ABC1234 nap 100k</code>')
+        f'{ce("💡")} VD: <code>/yccode LOC88-TRIAN-ABC1234 nap 100k</code>')
     if not args:
         return await msg.reply_text(usage, parse_mode=ParseMode.HTML)
     code = args[0].strip().upper()
