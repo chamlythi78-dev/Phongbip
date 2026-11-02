@@ -35,7 +35,7 @@ BOT_USERNAME = "loc88game_bot"
 ROOM_LINK = "https://t.me/loc88dinhcao"
 MIN_WITHDRAW = 50000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
-LOG_GROUP_ID = -1004375247819
+LOG_GROUP_ID = -1004461090575
 
 # THÔNG TIN NGÂN HÀNG MỚI
 BANK_ID = "ICB"
@@ -43,7 +43,7 @@ ACCOUNT_NO = "100886797711"
 ACCOUNT_NAME = "TRAN DANG HOANG"
 
 _bot_instance = None
-GROUP_IDS = [-1004375247819]
+GROUP_IDS = [-1004461090575]
 
 group_games = {}
 room_betting_enabled = {}
@@ -1149,7 +1149,7 @@ PREFIX_WORDS = [
 
 def generate_transfer_content(user_id):
     prefix = random.choice(PREFIX_WORDS)
-    return f"{prefix} {user_id}".lower()
+    return f"SEVQR {prefix} {user_id}".upper()
 
 def get_deposit_info(user_id, amount=0):
     content = generate_transfer_content(user_id)
@@ -3028,26 +3028,31 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 cau_tx += "🔵" if h['tx'] == "tai" else "🔴"
                 cau_cl += "⚪️" if h['cl'] == "chan" else "⚫️"
 
-            total_bet_amount = sum(int(b.get("amount", 0)) for b in game_state["bets"].values())
-            # Bố cục tổng kết theo mẫu: ba viên xúc xắc, tổng điểm, hai loại kết quả,
-            # thống kê tiền và cầu 10 phiên gần nhất.
+            def _num_ce(n):
+                # Hiển thị số bằng emoji premium dạng keycap (1️⃣ 2️⃣ ...)
+                return "".join(ce(f"{d}️⃣") for d in str(n))
+
+            tx_icon = "🔵" if res_tx == "tai" else "🔴"
+            cl_icon = "⚪️" if res_cl == "chan" else "⚫️"
+            tx_name = "Tài" if res_tx == "tai" else "Xỉu"
+            cl_name = "Chẵn" if res_cl == "chan" else "Lẻ"
+            dice_rows = "\n".join(f'┃ {ce("😃")}  {_num_ce(v)}' for v in dice_values)
+
             final_msg = (
-                f'{ce("🌟")} <b>Kết quả phiên #{session_id}</b>\n'
+                f'{ce("⭐")} <b>Kết quả phiên #{session_id}</b>\n'
                 f'┏━━━━━━━━━━━━━━\n'
-                f'┃{ce("😃")}  {ce("🌟")} <b>{dice_values[0]}</b>\n'
-                f'┃{ce("😃")}  {ce("🌟")} <b>{dice_values[1]}</b>\n'
-                f'┃{ce("😃")}  {ce("🌟")} <b>{dice_values[2]}</b>\n'
-                f'┃{ce("🧮")} Tổng điểm：{ce("🌟")} <b>{total}</b>\n'
-                f'┃{ce("🔴")} Tài/Xỉu：<b>{"Tài" if res_tx == "tai" else "Xỉu"}</b>\n'
-                f'┃{ce("⚫️")} Chẵn/Lẻ：<b>{"Chẵn" if res_cl == "chan" else "Lẻ"}</b>\n'
+                f'{dice_rows}\n'
+                f'┃ {ce("🧮")} Tổng điểm：{_num_ce(total)}\n'
+                f'┃ {tx_icon} Tài/Xỉu：<b>{tx_name}</b>\n'
+                f'┃ {cl_icon} Chẵn/Lẻ：<b>{cl_name}</b>\n'
                 f'┃\n'
-                f'┃{ce("💰")} Tổng cược：<b>{fmt_money(total_bet_amount)}</b>\n'
-                f'┃{ce("💸")} Tổng thắng：<b>{fmt_money(total_win)}</b>\n'
-                f'┃{ce("🤑")} Tổng thua：<b>{fmt_money(total_lose)}</b>\n'
-                f'┃{ce("🪙")} Cộng hũ：<b>+{fmt_money(jackpot_contribution)}</b>\n'
-                f'┃{ce("🏆")} Hũ hiện tại：<b>{fmt_money(jackpot_amount)}</b>\n'
-                f'┗━━━━━━━━━━━━━━\n\n'
-                f'{ce("🕯")} <b>10 phiên gần nhất</b>\n'
+                f'┃ {ce("💰")} Tổng thắng：{fmt_money(total_win)}\n'
+                f'┃ {ce("🤑")} Tổng thua：{fmt_money(total_lose)}\n'
+                f'┃ {ce("🪙")} Cộng hũ：+{fmt_money(jackpot_contribution)}\n'
+                f'┃ {ce("🏆")} Hũ hiện tại：{fmt_money(jackpot_amount)}\n'
+                f'┗━━━━━━━━━━━━━━\n'
+                f'\n'
+                f'🕯 <b>10 phiên gần nhất</b>\n'
                 f'{cau_tx if cau_tx else "Chưa có"}\n'
                 f'{cau_cl if cau_cl else "Chưa có"}'
             )
