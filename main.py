@@ -3,7 +3,6 @@ import os
 import re
 import random
 import asyncio
-import collections
 import hashlib
 import csv
 import traceback
@@ -31,22 +30,20 @@ TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 SEPAY_API_KEY = os.getenv("SEPAY_API_KEY", "")  # Bắt buộc cấu hình bằng biến môi trường; không hardcode khóa bí mật
 
-ADMIN_IDS = [5633649201, 7884394252]
-BOT_USERNAME = "Jav88sangamebot"
-SESSION_HISTORY_GROUP_ID = -1004491701518
-SESSION_HISTORY_URL = "https://t.me/lspjav88"
-ROOM_LINK = "https://t.me/jav88sanhu"
+ADMIN_IDS = [5633649201, 7884394252, 7514060311]
+BOT_USERNAME = "loc88game_bot"
+ROOM_LINK = "https://t.me/loc88dinhcao"
 MIN_WITHDRAW = 50000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
-LOG_GROUP_ID = -1004375247819
+LOG_GROUP_ID = -1004461090575
 
 # THÔNG TIN NGÂN HÀNG MỚI
-BANK_ID = "BIDV"
-ACCOUNT_NO = "96247MD0AQ"
-ACCOUNT_NAME = "NGUYEN KIM LONG"
+BANK_ID = "ICB"
+ACCOUNT_NO = "100886797711"
+ACCOUNT_NAME = "TRAN DANG HOANG"
 
 _bot_instance = None
-GROUP_IDS = [-1004375247819]
+GROUP_IDS = [-1004461090575]
 
 group_games = {}
 room_betting_enabled = {}
@@ -470,7 +467,6 @@ CREATE TABLE IF NOT EXISTS users (
 """)
 query("CREATE TABLE IF NOT EXISTS banned_games (user_id BIGINT, game_id INTEGER, PRIMARY KEY (user_id, game_id))")
 query("CREATE TABLE IF NOT EXISTS banned_features (user_id BIGINT, feature TEXT, PRIMARY KEY (user_id, feature))")
-query("""CREATE TABLE IF NOT EXISTS spam_permanent_bans (user_id BIGINT PRIMARY KEY, reason TEXT NOT NULL, banned_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
 query("CREATE TABLE IF NOT EXISTS banned_admins (admin_id BIGINT PRIMARY KEY, banned_by BIGINT, reason TEXT, banned_at TEXT)")
 query("""
 CREATE TABLE IF NOT EXISTS user_bonus (
@@ -549,19 +545,6 @@ CREATE TABLE IF NOT EXISTS group_interactions (
     PRIMARY KEY (user_id, group_id)
 )
 """)
-query("""
-CREATE TABLE IF NOT EXISTS user_game_streaks (
-    user_id BIGINT NOT NULL,
-    group_id BIGINT NOT NULL,
-    current_type TEXT NOT NULL DEFAULT '',
-    current_count INTEGER NOT NULL DEFAULT 0,
-    max_win INTEGER NOT NULL DEFAULT 0,
-    max_loss INTEGER NOT NULL DEFAULT 0,
-    updated_at TEXT,
-    PRIMARY KEY (user_id, group_id)
-)
-""")
-
 query("""
 CREATE TABLE IF NOT EXISTS daily_top_interactions (
     user_id BIGINT,
@@ -709,13 +692,6 @@ query("ALTER TABLE history ADD COLUMN IF NOT EXISTS bal_before BIGINT")
 query("ALTER TABLE history ADD COLUMN IF NOT EXISTS bal_after BIGINT")
 query("CREATE TABLE IF NOT EXISTS banned (user_id BIGINT PRIMARY KEY)")
 query("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
-try:
-    _session_counter_row = query("SELECT value FROM settings WHERE key='dice_session_counter'")
-    if not _session_counter_row:
-        query("INSERT INTO settings(key, value) VALUES('dice_session_counter', '0') ON CONFLICT (key) DO NOTHING")
-except Exception as _counter_init_error:
-    print(f"[session-counter] chưa khởi tạo được bộ đếm: {_counter_init_error}")
-
 query("CREATE TABLE IF NOT EXISTS welcome_bonus_log (user_id BIGINT PRIMARY KEY, amount BIGINT DEFAULT 0, created_at TEXT)")
 query("CREATE TABLE IF NOT EXISTS stats_bet_base (user_id BIGINT, day DATE, bet BIGINT DEFAULT 0, win BIGINT DEFAULT 0, PRIMARY KEY (user_id, day))")
 # Mốc reset hoàn trả theo từng người (scope: ngay | tuan). Doanh số hoàn trả = bet_daily - mốc này.
@@ -1173,7 +1149,7 @@ PREFIX_WORDS = [
 
 def generate_transfer_content(user_id):
     prefix = random.choice(PREFIX_WORDS)
-    return f"{prefix} {user_id}".lower()
+    return f"SEVQR {prefix} {user_id}".upper()
 
 def get_deposit_info(user_id, amount=0):
     content = generate_transfer_content(user_id)
@@ -1182,7 +1158,7 @@ def get_deposit_info(user_id, amount=0):
     
     caption = (
         f'{ce("💳")} <b>THÔNG TIN NẠP TIỀN</b>\n\n'
-        f'{ce("🏦")} Ngân hàng: <b>BIDV</b>\n'
+        f'{ce("🏦")} Ngân hàng: <b>VietinBank</b>\n'
         f'{ce("👤")} CTK: <b>{ACCOUNT_NAME}</b>\n'
         f'{ce("💰")} STK: <code>{ACCOUNT_NO}</code>\n'
         f'{ce("✍️")} Nội dung: <code>{content}</code>\n'
@@ -1219,7 +1195,7 @@ async def fetch_qr_image(qr_url: str) -> BytesIO:
 
 # ---- Tạo QR VietQR ngay trên server (không phụ thuộc img.vietqr.io) ----
 _BANK_BIN = {"MB": "970422", "MBBANK": "970422", "VCB": "970436", "TCB": "970407",
-             "ACB": "970416", "BIDV": "970418", "CTG": "970415", "VPB": "970432",
+             "ACB": "970416", "BIDV": "970418", "CTG": "970415", "ICB": "970415", "VPB": "970432",
              "TPB": "970423", "STB": "970403", "VIB": "970441", "OCB": "970448",
              "MSB": "970426", "SHB": "970443", "LPB": "970449", "HDB": "970437",
              "AGRIBANK": "970405", "SCB": "970429", "EIB": "970431", "SEAB": "970440",
@@ -2037,13 +2013,13 @@ async def sethoancuoc_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ===== GIFTCODE 5 LOẠI ================================
 # ============================================================
 GIFT_TYPES = {
-    "TANTHU":  {"name": "Code Tân Thủ",  "icon": "🎁", "fmt": "JAV88-TANTHU-xxxxxxx"},
-    "CODEMUA": {"name": "Code Mua",      "icon": "🛒", "fmt": "JAV88-CODEMUA-xxxxxxx"},
-    "GIOVANG": {"name": "Code Giờ Vàng", "icon": "⏰", "fmt": "JAV88-GIOVANG-xxxxxxx"},
-    "NAP":     {"name": "Code Nạp",      "icon": "💳", "fmt": "JAV88-1234567-ABCDEFG"},
-    "TRIAN":   {"name": "Code Tri Ân",   "icon": "🎉", "fmt": "JAV88-TRIAN-xxxxxxx"},
-    "TICHLUY": {"name": "Code Tích Lũy", "icon": "🏆", "fmt": "JAV88-TICHLUY-xxxxxxx"},
-    "INTERACT": {"name": "Code Tương Tác", "icon": "💬", "fmt": "JAV88-INTERACT-xxxxxxx"},
+    "TANTHU":  {"name": "Code Tân Thủ",  "icon": "🎁", "fmt": "LOC88-TANTHU-xxxxxxx"},
+    "CODEMUA": {"name": "Code Mua",      "icon": "🛒", "fmt": "LOC88-CODEMUA-xxxxxxx"},
+    "GIOVANG": {"name": "Code Giờ Vàng", "icon": "⏰", "fmt": "LOC88-GIOVANG-xxxxxxx"},
+    "NAP":     {"name": "Code Nạp",      "icon": "💳", "fmt": "LOC88-1234567-ABCDEFG"},
+    "TRIAN":   {"name": "Code Tri Ân",   "icon": "🎉", "fmt": "LOC88-TRIAN-xxxxxxx"},
+    "TICHLUY": {"name": "Code Tích Lũy", "icon": "🏆", "fmt": "LOC88-TICHLUY-xxxxxxx"},
+    "INTERACT": {"name": "Code Tương Tác", "icon": "💬", "fmt": "LOC88-INTERACT-xxxxxxx"},
 }
 GIFT_BUY_EXPIRE_DAYS = 30
 _DIGITS = "0123456789"
@@ -2056,9 +2032,9 @@ def _rand(chars, n):
 def gen_gift_code(ctype):
     while True:
         if ctype == "NAP":
-            code = f"JAV88-{_rand(_DIGITS, 7)}-{_rand(_LETTERS, 7)}"
+            code = f"LOC88-{_rand(_DIGITS, 7)}-{_rand(_LETTERS, 7)}"
         else:
-            code = f"JAV88-{ctype}-{_rand(_ALNUM, 7)}"
+            code = f"LOC88-{ctype}-{_rand(_ALNUM, 7)}"
         if not query("SELECT 1 FROM giftcodes WHERE code=%s", (code,)):
             return code
 
@@ -2778,14 +2754,8 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 await asyncio.sleep(10)
                 continue
 
-            # Bộ đếm phiên lưu trong PostgreSQL để không quay về #1 khi sửa/redeploy bot.
-            try:
-                saved_counter = int(get_setting("dice_session_counter", "0") or 0)
-            except (TypeError, ValueError):
-                saved_counter = 0
-            SESSION_COUNTER["value"] = max(int(SESSION_COUNTER.get("value", 0)), saved_counter) + 1
+            SESSION_COUNTER["value"] += 1
             session_id = SESSION_COUNTER["value"]
-            set_setting("dice_session_counter", session_id)
 
             game_state = {
                 "status": "betting",
@@ -2815,12 +2785,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
             )
 
             try:
-                await bot.send_message(
-                    chat_id, start_text, parse_mode=ParseMode.HTML,
-                    reply_markup=InlineKeyboardMarkup([[
-                        btn("LỊCH SỬ PHIÊN", "📊", url=SESSION_HISTORY_URL)
-                    ]])
-                )
+                await bot.send_message(chat_id, start_text, parse_mode=ParseMode.HTML)
             except Exception as e:
                 print(f"Lỗi gửi tin nhắn bắt đầu phiên: {e}")
                 await asyncio.sleep(5)
@@ -2892,14 +2857,9 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
 
                 try:
                     new_stats_msg = await bot.send_message(chat_id, stats_text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([
-                        [
-                            btn('NẠP TIỀN TẠI ĐÂY', '💰', url=f'https://t.me/{BOT_USERNAME}?start=nap'),
-                            btn('BOT CHƠI GAME', '🎮', url=f'https://t.me/{BOT_USERNAME}')
-                        ],
-                        [
-                            btn('CHƠI TÀI XỈU 3D NGAY', '🎮', url=f'https://t.me/{BOT_USERNAME}?start=tx3d'),
-                            btn('LỊCH SỬ PHIÊN', '📊', url=SESSION_HISTORY_URL)
-                        ]
+                        [btn('NẠP TIỀN TẠI ĐÂY', '💰', url=f'https://t.me/{BOT_USERNAME}?start=nap')],
+                        [btn('BOT CHƠI GAME', '🎮', url=f'https://t.me/{BOT_USERNAME}')],
+                        [btn('CHƠI TÀI XỈU 3D NGAY', '🎮', url=f'https://t.me/{BOT_USERNAME}?start=tx3d')]
                     ]))
                     stats_msg_id = new_stats_msg.message_id
                 except Exception as e:
@@ -2956,7 +2916,6 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
 
             total_win = 0
             total_lose = 0
-            user_round_results = {}
 
             for bet_key, bet in game_state["bets"].items():
                 uid = bet["user_id"]
@@ -2997,7 +2956,6 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                     if dice_values == [target_triple, target_triple, target_triple]:
                         is_win = True; multiplier = 150
 
-                user_round_results.setdefault(uid, []).append(bool(is_win))
                 if is_win:
                     win_amt = int(amt * multiplier)
                     add_money(uid, win_amt, f"Thắng Tài Xỉu Room {choice.upper()}")
@@ -3024,39 +2982,6 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                             f'Chúc ông chủ may mắn',
                             parse_mode=ParseMode.HTML)
                     except: pass
-
-            # Cập nhật chuỗi thắng/thua theo từng người chơi sau mỗi phiên.
-            for streak_uid, outcomes in user_round_results.items():
-                # Có ít nhất một cửa thắng trong phiên được tính là phiên thắng.
-                round_type = "win" if any(outcomes) else "loss"
-                try:
-                    query(
-                        """INSERT INTO user_game_streaks
-                           (user_id, group_id, current_type, current_count, max_win, max_loss, updated_at)
-                           VALUES (%s,%s,%s,1,%s,%s,%s)
-                           ON CONFLICT (user_id, group_id) DO UPDATE SET
-                             current_count = CASE
-                               WHEN user_game_streaks.current_type = EXCLUDED.current_type
-                               THEN user_game_streaks.current_count + 1 ELSE 1 END,
-                             current_type = EXCLUDED.current_type,
-                             max_win = GREATEST(user_game_streaks.max_win,
-                               CASE WHEN EXCLUDED.current_type='win' THEN
-                                 CASE WHEN user_game_streaks.current_type='win'
-                                   THEN user_game_streaks.current_count + 1 ELSE 1 END
-                               ELSE 0 END),
-                             max_loss = GREATEST(user_game_streaks.max_loss,
-                               CASE WHEN EXCLUDED.current_type='loss' THEN
-                                 CASE WHEN user_game_streaks.current_type='loss'
-                                   THEN user_game_streaks.current_count + 1 ELSE 1 END
-                               ELSE 0 END),
-                             updated_at = EXCLUDED.updated_at""",
-                        (streak_uid, group_id, round_type,
-                         1 if round_type == "win" else 0,
-                         1 if round_type == "loss" else 0,
-                         get_vietnam_datetime_db())
-                    )
-                except Exception as streak_error:
-                    print(f"[streak] lỗi cập nhật user {streak_uid}: {streak_error}")
 
             jackpot_amount = get_jackpot()
             jackpot_contribution = 0
@@ -3103,45 +3028,36 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 cau_tx += "🔵" if h['tx'] == "tai" else "🔴"
                 cau_cl += "⚪️" if h['cl'] == "chan" else "⚫️"
 
-            # Tổng tiền đã đặt trong phiên hiện tại.
-            total_bet_amount = sum(
-                int(b.get("amount", 0)) for b in game_state.get("bets", {}).values()
-            )
+            total_bet = sum(int(b.get("amount", 0) or 0) for b in game_state["bets"].values())
 
-            # Cầu 10 phiên gần nhất: hàng trên Tài/Xỉu, hàng dưới Chẵn/Lẻ.
-            recent_rounds = game_history.get(group_id, [])[-10:]
-            bead_tx = " ".join(
-                ce("🔵") if h.get("tx") == "tai" else ce("🔴")
-                for h in recent_rounds
-            ) or "Chưa có dữ liệu"
-            bead_cl = " ".join(
-                ce("⚪️") if h.get("cl") == "chan" else ce("⚫️")
-                for h in recent_rounds
-            ) or "Chưa có dữ liệu"
+            # Dùng emoji Premium đã có ID trong CUSTOM_EMOJI; màu cầu giữ đúng quy ước T/X và Chẵn/Lẻ.
+            dice_display = "  ".join(ce(f"{v}️⃣") for v in dice_values)
+            cau_tx_display = " ".join(
+                ce("🔵") if h["tx"] == "tai" else ce("🔴")
+                for h in game_history.get(group_id, [])
+            )
+            cau_cl_display = " ".join(
+                ce("⚪️") if h["cl"] == "chan" else ce("⚫️")
+                for h in game_history.get(group_id, [])
+            )
 
             final_msg = (
                 f'{ce("🎉")} <b>KẾT QUẢ PHIÊN #{session_id}</b> {ce("🎉")}\\n'
                 f'━━━━━━━━━━━━━━━━━━━━\\n'
-                f'{ce("🎲")} <b>Kết quả xúc xắc</b>\\n'
-                f'<blockquote>'
-                f'{ce("1️⃣")} <b>{dice_values[0]}</b>\\n'
-                f'{ce("2️⃣")} <b>{dice_values[1]}</b>\\n'
-                f'{ce("3️⃣")} <b>{dice_values[2]}</b>\\n'
-                f'</blockquote>'
-                f'{ce("🧮")} Tổng điểm: <b>{total}</b>\\n'
-                f'{ce("🔴" if res_tx == "xiu" else "🔵")} Tài/Xỉu: <b>{("TÀI" if res_tx == "tai" else "XỈU")}</b>\\n'
-                f'{ce("⚪️" if res_cl == "chan" else "⚫️")} Chẵn/Lẻ: <b>{("CHẴN" if res_cl == "chan" else "LẺ")}</b>\\n'
+                f'{ce("🎲")} {dice_display}\\n'
+                f'{ce("🧮")} <b>Tổng điểm:</b> {ce("🧮")} <b>{total}</b>\\n'
+                f'{ce("🔴")} <b>Tài/Xỉu:</b> <b>{result_text.split()[0]}</b>\\n'
+                f'{ce("⚫️")} <b>Chẵn/Lẻ:</b> <b>{result_text.split()[1]}</b>\\n'
                 f'━━━━━━━━━━━━━━━━━━━━\\n'
-                f'{ce("🎯")} Tổng cược: <b>{fmt_money(total_bet_amount)}đ</b>\\n'
-                f'{ce("💵")} Tổng thắng: <b>{fmt_money(total_win)}đ</b>\\n'
-                f'{ce("📉")} Tổng thua: <b>{fmt_money(total_lose)}đ</b>\\n'
-                f'{ce("🪙")} Cộng hũ: <b>+{fmt_money(jackpot_contribution)}đ</b>\\n'
-                f'{ce("🎁")} Hũ hiện tại: <b>{fmt_money(jackpot_amount)}đ</b>\\n'
-                f'━━━━━━━━━━━━━━━━━━━━\\n'
-                f'{ce("📊")} <b>10 PHIÊN GẦN NHẤT</b>\\n'
-                f'{bead_tx}\\n'
-                f'{bead_cl}\\n'
-                f'━━━━━━━━━━━━━━━━━━━━'
+                f'{ce("💰")} <b>Tổng cược:</b> <b>{fmt_money(total_bet)}đ</b>\\n'
+                f'{ce("💵")} <b>Tổng thắng:</b> <b>{fmt_money(total_win)}đ</b>\\n'
+                f'{ce("📉")} <b>Tổng thua:</b> <b>{fmt_money(total_lose)}đ</b>\\n'
+                f'{ce("🪙")} <b>Cộng hũ:</b> <b>+{fmt_money(jackpot_contribution)}đ</b>\\n'
+                f'{ce("🎁")} <b>Hũ hiện tại:</b> <b>{fmt_money(jackpot_amount)}đ</b>\\n'
+                f'━━━━━━━━━━━━━━━━━━━━\\n\\n'
+                f'{ce("📈")} <b>10 PHIÊN GẦN NHẤT</b>\\n'
+                f'{cau_tx_display if cau_tx_display else "Chưa có dữ liệu"}\\n'
+                f'{cau_cl_display if cau_cl_display else "Chưa có dữ liệu"}'
             )
 
             if jackpot_winners:
@@ -3159,31 +3075,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
             except Exception as e:
                 print(f"Lỗi mở khóa chat: {e}")
 
-            await bot.send_message(
-                chat_id, final_msg, parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup([[
-                    btn("LỊCH SỬ PHIÊN", "📊", url=SESSION_HISTORY_URL)
-                ]])
-            )
-            # Gửi kết quả từng phiên sang nhóm lưu lịch sử.
-            try:
-                # Định dạng lịch sử gọn giống mẫu kênh: một dòng số phiên,
-                # một dòng ba mặt xúc xắc + Tài/Xỉu, Chẵn/Lẻ và màu tương ứng.
-                history_post = (
-                    f'{ce("🎲")} <b>Kết quả phiên {session_id}</b> {ce("🎲")}\n'
-                    f'<b>{dice_str}</b> 👉 <b>{html.escape(result_text)}</b> '
-                    f'{result_icons}\n'
-                    f'{ce("💯")} Tổng điểm: <b>{total}</b>'
-                )
-                await bot.send_message(
-                    SESSION_HISTORY_GROUP_ID, history_post,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=InlineKeyboardMarkup([[
-                        btn("LỊCH SỬ PHIÊN", "📊", url=SESSION_HISTORY_URL)
-                    ]])
-                )
-            except Exception as history_error:
-                print(f"[session-history] không gửi được phiên #{session_id}: {history_error}")
+            await bot.send_message(chat_id, final_msg, parse_mode=ParseMode.HTML)
             group_games.pop(group_id, None)
             await asyncio.sleep(10)
 
@@ -4784,7 +4676,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_reply = update.effective_message
     key = re.sub(r'^[^\w]+', '', txt).strip()
 
-    if update.effective_chat.type == "private" and re.fullmatch(r'JAV88-[A-Z0-9]+(?:-[A-Z0-9]+)?', txt.strip().upper()):
+    if update.effective_chat.type == "private" and re.fullmatch(r'(?:LOC88|JAV88)-[A-Z0-9]+(?:-[A-Z0-9]+)?', txt.strip().upper()):
         code_in = txt.strip().upper()
         if await redeem_giftcode(update, uid, code_in):
             return
@@ -4813,7 +4705,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [btn("Nhận thưởng", "🎉", callback_data="acc_nhan_thuong"), btn("Chuyển tiền", "💸", callback_data="acc_chuyen_tien")],
             [btn("VIP", "👑", callback_data="acc_vip"), btn("Fan cứng +30k", "🔥", callback_data="acc_fan_cung")],
             [btn("Tích lũy nạp", "💎", callback_data="acc_tich_luy"), btn("Kết Sát", "🔐", callback_data="acc_ket_sat")],
-            [btn("Hỗ trợ", "🆘", url="https://t.me/dgfrutil")]
+            [btn("Hỗ trợ", "🆘", url="https://t.me/loc88cskh247")]
         ])
 
         msg = (
@@ -4909,7 +4801,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [btn("Mời đệ tử", "🧑‍🤝‍🧑", callback_data="ev_moi_de_tu")]
         ])
         return await user_reply.reply_text(
-            f'{ce("🎁")} <b>TRUNG TÂM EVENT JAV88</b>\nChọn chương trình bạn muốn xem hoặc nhận thưởng:',
+            f'{ce("🎁")} <b>TRUNG TÂM EVENT LOC88</b>\nChọn chương trình bạn muốn xem hoặc nhận thưởng:',
             reply_markup=kb, parse_mode=ParseMode.HTML)
 
     if key == "LỆNH":
@@ -7182,7 +7074,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if d.startswith("dep_"):
         if d == "dep_support":
             await q.answer()
-            return await q.message.reply_text(f'{ce("🔔")} <b>HỖ TRỢ NẠP TIỀN</b>\n\nVui lòng liên hệ Admin: @dgfrutil\nHoặc dùng lệnh <code>/nap [số_tiền]</code> để tạo QR.', parse_mode=ParseMode.HTML)
+            return await q.message.reply_text(f'{ce("🔔")} <b>HỖ TRỢ NẠP TIỀN</b>\n\nVui lòng liên hệ Admin: @loc88cskh247\nHoặc dùng lệnh <code>/nap [số_tiền]</code> để tạo QR.', parse_mode=ParseMode.HTML)
         try:
             await q.answer()
             amount = int(d.split("_")[1])
@@ -8013,67 +7905,6 @@ async def settle_interaction_top_loop(bot):
         await asyncio.sleep(30)
 
 
-
-async def _streak_top_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE, streak_type: str):
-    group = update.effective_chat
-    gid = group.id if group and group.type != "private" else (GROUP_IDS[0] if GROUP_IDS else None)
-    if not gid:
-        return await update.effective_message.reply_text("Chưa xác định được nhóm thống kê.")
-    column = "max_win" if streak_type == "win" else "max_loss"
-    title = "DÂY THẮNG LIÊN TIẾP" if streak_type == "win" else "DÂY THUA LIÊN TIẾP"
-    icon = "🔥" if streak_type == "win" else "🥶"
-    rows = query(
-        f"SELECT user_id, {column}, current_type, current_count FROM user_game_streaks "
-        f"WHERE group_id=%s AND {column}>0 ORDER BY {column} DESC, user_id ASC LIMIT 10",
-        (gid,)
-    ) or []
-    lines = [f"{icon} <b>TOP 10 {title}</b>", "━━━━━━━━━━━━━━━━━━"]
-    medals = ["🥇", "🥈", "🥉"]
-    for rank, row in enumerate(rows, 1):
-        uid, best, current_type, current_count = row
-        name = await _telegram_name(ctx.bot, uid, {}) or f"Thành viên {uid}"
-        medal = medals[rank-1] if rank <= 3 else "🏅"
-        lines.append(f"{medal} <b>{rank}.</b> {html.escape(name)} — <b>{int(best)}</b> phiên")
-    if not rows:
-        lines.append("Chưa có dữ liệu chuỗi thắng/thua.")
-    own = query(
-        "SELECT current_type,current_count,max_win,max_loss FROM user_game_streaks WHERE user_id=%s AND group_id=%s",
-        (update.effective_user.id, gid)
-    ) or []
-    lines += ["━━━━━━━━━━━━━━━━━━"]
-    if own:
-        current_type, current_count, max_win, max_loss = own[0]
-        if current_type == streak_type:
-            lines.append(f"👤 <b>Bạn đang có:</b> {int(current_count)} phiên {'thắng' if streak_type == 'win' else 'thua'} liên tiếp.")
-        else:
-            lines.append(f"👤 <b>Bạn hiện không có dây {'thắng' if streak_type == 'win' else 'thua'}.</b>")
-        lines.append(f"🏆 Kỷ lục cá nhân: thắng {int(max_win)} · thua {int(max_loss)} phiên.")
-        my_best = int(max_win if streak_type == "win" else max_loss)
-        positions = [int(r[1]) for r in rows]
-        rank = next((i for i, r in enumerate(rows, 1) if int(r[0]) == update.effective_user.id), None)
-        if rank:
-            lines.append(f"✅ Bạn đang đứng Top {rank} trong bảng này.")
-        elif my_best:
-            lines.append("ℹ️ Kỷ lục của bạn hiện chưa lọt Top 10.")
-        else:
-            lines.append("ℹ️ Bạn chưa có chuỗi nào được ghi nhận.")
-    else:
-        lines.append("👤 Bạn chưa có dữ liệu thắng/thua trong nhóm này.")
-    await update.effective_message.reply_text("\\n".join(lines), parse_mode=ParseMode.HTML)
-
-async def daythang_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    try:
-        await _streak_top_cmd(update, ctx, "win")
-    except Exception as e:
-        print(f"Lỗi /daythang: {e}")
-        await update.effective_message.reply_text("Không tải được bảng dây thắng. Vui lòng thử lại.")
-
-async def daythua_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    try:
-        await _streak_top_cmd(update, ctx, "loss")
-    except Exception as e:
-        print(f"Lỗi /daythua: {e}")
-        await update.effective_message.reply_text("Không tải được bảng dây thua. Vui lòng thử lại.")
 
 async def topnap_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Top 10 người nạp thành công."""
@@ -10277,10 +10108,10 @@ _ADM_CATS = [
         ("use", "taocode", "Tạo code thường", "x", "/taocode [số tiền] [lượt dùng]", "/taocode 10000 50"),
         ("use", "taocodeall", "Tạo nhiều code 1 lượt", "x", "/taocodeall [số tiền] [số lượng]", "/taocodeall 5000 20"),
         ("use", "xoacode", "Xoá code thường", "x", "/xoacode [mã]", "/xoacode ABC12345"),
-        ("use", "xoagift", "Xoá giftcode", "x", "/xoagift [mã]", "/xoagift JAV88-TANTHU-XXXXXXX"),
+        ("use", "xoagift", "Xoá giftcode", "x", "/xoagift [mã]", "/xoagift LOC88-TANTHU-XXXXXXX"),
         ("run", "dsnaphomnay", "Danh sách người đã nạp thành công hôm nay", "dsnaphomnay", None, None),
         ("use", "tangcodenap", "Tặng code thủ công cho người đã nạp", "x", "/tangcodenap [giá trị] [vòng cược] [hạn] [homnay|all|id1,id2] [nạp tối thiểu]", "/tangcodenap 20k 1 1n homnay"),
-        ("use", "yccode", "Thêm / gỡ yêu cầu nhập code (nạp trong ngày, tổng nạp)", "x", "/yccode [mã] nap|tongnap [số tiền] | off", "/yccode JAV88-TRIAN-ABC1234 nap 100k"),
+        ("use", "yccode", "Thêm / gỡ yêu cầu nhập code (nạp trong ngày, tổng nạp)", "x", "/yccode [mã] nap|tongnap [số tiền] | off", "/yccode LOC88-TRIAN-ABC1234 nap 100k"),
     ]),
     ("tk", "📊", "THỐNG KÊ & XUẤT FILE", "Thống kê hệ thống và xuất file Excel đẹp nhiều sheet.", [
         ("run", "thongke", "Bảng thống kê hôm nay / tháng / tổng", "thongke", None, None),
@@ -10314,7 +10145,7 @@ _ADM_CATS.append((
         ("use", "resetall", "Lệnh reset toàn bộ số dư (bí danh)", "x", "/resetall", "/resetall"),
         ("use", "xoalsall", "Xoá toàn bộ lịch sử", "x", "/xoalsall", "/xoalsall"),
         ("use", "xoals", "Xoá lịch sử một user", "x", "/xoals [ID]", "/xoals 123456789"),
-        ("use", "setname", "Đổi tên bot", "x", "/setname [tên mới]", "/setname JAV88"),
+        ("use", "setname", "Đổi tên bot", "x", "/setname [tên mới]", "/setname LOC88"),
         ("use", "kmnapvc", "Tặng khuyến mãi theo vòng cược", "x", "/kmnapvc [ID] [số tiền]", "/kmnapvc 123456789 20000"),
         ("use", "lsnap", "Lịch sử nạp của user", "x", "/lsnap [ID]", "/lsnap 123456789"),
         ("use", "lsrut", "Lịch sử rút của user", "x", "/lsrut [ID]", "/lsrut 123456789"),
@@ -11149,7 +10980,7 @@ async def yccode_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f'<code>/yccode [mã] tongnap [số tiền]</code> — phải có <b>tổng nạp</b> đủ mức này\n'
         f'<code>/yccode [mã] off</code> — gỡ toàn bộ yêu cầu\n'
         f'<code>/yccode [mã]</code> — xem yêu cầu hiện tại\n\n'
-        f'{ce("💡")} VD: <code>/yccode JAV88-TRIAN-ABC1234 nap 100k</code>')
+        f'{ce("💡")} VD: <code>/yccode LOC88-TRIAN-ABC1234 nap 100k</code>')
     if not args:
         return await msg.reply_text(usage, parse_mode=ParseMode.HTML)
     code = args[0].strip().upper()
@@ -11331,78 +11162,6 @@ async def _on_error(update, context):
         pass
 
 
-
-# ============================================================
-# CHỐNG SPAM MENU: hơn 3 thao tác trong 2 giây => khóa bot vĩnh viễn
-# Áp dụng cho tin nhắn và lần bấm nút inline trong chat riêng.
-# Danh sách khóa lưu PostgreSQL, không mất khi restart/redeploy.
-# ============================================================
-_SPAM_ACTIVITY = collections.defaultdict(collections.deque)
-_SPAM_WINDOW_SECONDS = 2.0
-_SPAM_MAX_EVENTS = 3
-
-def _is_spam_permanently_banned(user_id: int) -> bool:
-    rows = query("SELECT 1 FROM spam_permanent_bans WHERE user_id=%s", (user_id,))
-    return bool(rows)
-
-async def spam_guard(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not user:
-        return
-    uid = user.id
-
-    # Không áp dụng cho quản trị viên để tránh khóa nhầm người vận hành.
-    if uid in ADMIN_IDS:
-        return
-
-    # Chỉ kiểm soát menu bot trong chat riêng, không phạt hoạt động bình thường ở nhóm.
-    chat = update.effective_chat
-    if not chat or chat.type != "private":
-        return
-
-    if _is_spam_permanently_banned(uid):
-        if update.callback_query:
-            try:
-                await update.callback_query.answer()
-            except Exception:
-                pass
-        raise ApplicationHandlerStop
-
-    now = time.monotonic()
-    events = _SPAM_ACTIVITY[uid]
-    while events and now - events[0] > _SPAM_WINDOW_SECONDS:
-        events.popleft()
-    events.append(now)
-
-    if len(events) > _SPAM_MAX_EVENTS:
-        query(
-            "INSERT INTO spam_permanent_bans(user_id, reason) VALUES(%s,%s) "
-            "ON CONFLICT(user_id) DO NOTHING",
-            (uid, "Spam quá 3 thao tác trong 2 giây tại menu bot")
-        )
-        _SPAM_ACTIVITY.pop(uid, None)
-        print(f"[spam-guard] permanently blocked user_id={uid}")
-        if update.callback_query:
-            try:
-                await update.callback_query.answer()
-            except Exception:
-                pass
-        raise ApplicationHandlerStop
-
-async def unban_spam_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id not in ADMIN_IDS:
-        return
-    if not ctx.args or not ctx.args[0].isdigit():
-        await update.effective_message.reply_text("Cú pháp: /unbanspam USER_ID")
-        return
-    uid = int(ctx.args[0])
-    query("DELETE FROM spam_permanent_bans WHERE user_id=%s", (uid,))
-    _SPAM_ACTIVITY.pop(uid, None)
-    await update.effective_message.reply_text(f"Đã gỡ khóa chống spam cho user {uid}.")
-
-application.add_handler(MessageHandler(filters.ALL, spam_guard), group=-100)
-application.add_handler(CallbackQueryHandler(spam_guard), group=-100)
-application.add_handler(CommandHandler("unbanspam", unban_spam_cmd), group=-99)
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("lienket", lien_ket))
 application.add_handler(CommandHandler("taikhoan", taikhoan_cmd))
@@ -11529,26 +11288,6 @@ application.add_handler(CommandHandler("dsban", dsban_cmd))
 application.add_handler(CommandHandler("dsrut", dsrut_cmd))
 application.add_handler(CommandHandler("dsnap", dsnap_cmd))
 application.add_handler(CommandHandler("setsd", setsd_cmd))
-async def _early_top_cmd(update, ctx):
-    try:
-        await top_cmd(update, ctx)
-    except Exception as e:
-        print(f"Lỗi /top: {e}")
-        await update.effective_message.reply_text("Không tải được bảng Top. Vui lòng thử lại.")
-    raise ApplicationHandlerStop
-
-async def _early_checktt_cmd(update, ctx):
-    try:
-        await checktt_cmd(update, ctx)
-    except Exception as e:
-        print(f"Lỗi /checktt: {e}")
-        await update.effective_message.reply_text("Không tải được thống kê tương tác. Vui lòng thử lại.")
-    raise ApplicationHandlerStop
-
-application.add_handler(CommandHandler("daythang", daythang_cmd), group=-3)
-application.add_handler(CommandHandler("daythua", daythua_cmd), group=-3)
-application.add_handler(CommandHandler("top", _early_top_cmd), group=-3)
-application.add_handler(CommandHandler("checktt", _early_checktt_cmd), group=-3)
 application.add_handler(CommandHandler("top", top_cmd))
 application.add_handler(CommandHandler("topnap", topnap_cmd))
 application.add_handler(CommandHandler("topsodu", topsodu_cmd))
@@ -11593,8 +11332,6 @@ async def main():
         BotCommand("topsodu", "Top số dư"),
         BotCommand("topcuoc", "Top cược"),
         BotCommand("checktt", "Kiểm tra tương tác hôm nay"),
-        BotCommand("daythang", "Top 10 dây thắng liên tiếp"),
-        BotCommand("daythua", "Top 10 dây thua liên tiếp"),
         BotCommand("help", "Hướng dẫn sử dụng"),
         BotCommand("sd", "Xem số dư"),
         BotCommand("his", "Lịch sử giao dịch"),
