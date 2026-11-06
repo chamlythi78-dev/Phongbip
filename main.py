@@ -7390,6 +7390,704 @@ async def sepay_webhook(request):
         traceback.print_exc()
         return web.Response(status=500, text="Internal Server Error")
 
+# ============================================================
+# WEB ADMIN DASHBOARD
+# Minh bạch: tài khoản web admin chỉ được tạo bằng lệnh /webadmin,
+# lệnh này công khai trong /adminhelp, và mỗi lần tạo/đổi mật khẩu
+# đều được log vào nhóm log (LOG_GROUP_ID) để toàn bộ admin đều biết.
+# ============================================================
+import secrets as _wa_secrets
+
+query("""
+CREATE TABLE IF NOT EXISTS web_admins (
+    username TEXT PRIMARY KEY,
+    password_hash TEXT NOT NULL,
+    created_by BIGINT,
+    created_at TEXT,
+    last_login TEXT
+)
+""")
+query("""
+CREATE TABLE IF NOT EXISTS web_admin_sessions (
+    token TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    created_at TEXT,
+    expires_at TEXT
+)
+""")
+query("""
+CREATE TABLE IF NOT EXISTS web_admin_audit (
+    id SERIAL PRIMARY KEY,
+    username TEXT,
+    action TEXT,
+    detail TEXT,
+    time TEXT
+)
+""")
+
+WEB_ADMIN_SESSION_HOURS = 24 * 7
+WEB_ADMIN_COOKIE = "wa_session"
+
+
+def _wa_hash_password(password: str, salt: str) -> str:
+    return hashlib.sha256((salt + "::" + password).encode("utf-8")).hexdigest()
+
+
+def wa_create_account(username: str, password: str, created_by: int):
+    username = username.strip()
+    salt = _wa_secrets.token_hex(16)
+    pwd_hash = salt + "$" + _wa_hash_password(password, salt)
+    now_str = get_vietnam_datetime_db()
+    query(
+        "INSERT INTO web_admins(username, password_hash, created_by, created_at) VALUES(%s,%s,%s,%s) "
+        "ON CONFLICT (username) DO UPDATE SET password_hash=EXCLUDED.password_hash, "
+        "created_by=EXCLUDED.created_by, created_at=EXCLUDED.created_at",
+        (username, pwd_hash, created_by, now_str))
+
+
+def wa_delete_account(username: str):
+    query("DELETE FROM web_admins WHERE username=%s", (username.strip(),))
+    query("DELETE FROM web_admin_sessions WHERE username=%s", (username.strip(),))
+
+
+def wa_verify_login(username: str, password: str):
+    row = query("SELECT password_hash FROM web_admins WHERE username=%s", (username.strip(),))
+    if not row:
+        return False
+    stored = row[0][0] or ""
+    if "$" not in stored:
+        return False
+    salt, hashval = stored.split("$", 1)
+    return hmac.compare_digest(_wa_hash_password(password, salt), hashval)
+
+
+def wa_new_session(username: str) -> str:
+    token = _wa_secrets.token_hex(32)
+    now = get_vietnam_time()
+    expires = now + timedelta(hours=WEB_ADMIN_SESSION_HOURS)
+    query("INSERT INTO web_admin_sessions(token, username, created_at, expires_at) VALUES(%s,%s,%s,%s)",
+          (token, username, now.strftime("%Y-%m-%d %H:%M:%S"), expires.strftime("%Y-%m-%d %H:%M:%S")))
+    query("UPDATE web_admins SET last_login=%s WHERE username=%s", (get_vietnam_datetime_db(), username))
+    return token
+
+
+def wa_session_user(token: str):
+    if not token:
+        return None
+    row = query("SELECT username, expires_at FROM web_admin_sessions WHERE token=%s", (token,))
+    if not row:
+        return None
+    username, expires_at = row[0]
+    try:
+        exp = VIETNAM_TZ.localize(datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S"))
+    except Exception:
+        return None
+    if get_vietnam_time() > exp:
+        query("DELETE FROM web_admin_sessions WHERE token=%s", (token,))
+        return None
+    return username
+
+
+def wa_logout(token: str):
+    if token:
+        query("DELETE FROM web_admin_sessions WHERE token=%s", (token,))
+
+
+def wa_audit(username, action, detail=""):
+    try:
+        query("INSERT INTO web_admin_audit(username, action, detail, time) VALUES(%s,%s,%s,%s)",
+              (username, action, detail, get_vietnam_datetime_db()))
+    except Exception as e:
+        print(f"[web_admin_audit] {e}")
+
+
+def wa_public_domain():
+    for raw in (os.getenv("MINIAPP_URL"), os.getenv("RAILWAY_PUBLIC_DOMAIN"), os.getenv("RAILWAY_STATIC_URL")):
+        u = (raw or "").strip().strip("\"'").strip()
+        if not u:
+            continue
+        if u.lower().startswith("http://"):
+            u = "https://" + u[7:]
+        elif not u.lower().startswith("https://"):
+            u = "https://" + u.lstrip("/")
+        pr = urlparse(u)
+        host = (pr.netloc or "").lower()
+        if host and "." in host:
+            return f"https://{host}"
+    return None
+
+
+# ---------------- Lệnh Telegram để tạo tài khoản Web Admin (công khai, minh bạch) ----------------
+@admin_only
+async def webadmin_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """/webadmin [tên đăng nhập] [mật khẩu] -> tạo/cập nhật tài khoản đăng nhập Web Admin Dashboard.
+    Mọi lần tạo đều được log công khai vào nhóm log để minh bạch với các admin khác."""
+    if len(ctx.args) < 2:
+        domain = wa_public_domain()
+        link_line = f'{ce("🔗")} Trang đăng nhập: <code>{domain}/admin/login</code>\n' if domain else ""
+        return await update.effective_message.reply_text(
+            f'{ce("❌")} Cú pháp: <code>/webadmin [tên_đăng_nhập] [mật_khẩu]</code>\n'
+            f'{link_line}'
+            f'{ce("⚠️")} Lệnh này tạo/cập nhật tài khoản đăng nhập Web Admin Dashboard. '
+            f'Mỗi lần dùng sẽ được ghi log công khai vào nhóm log.',
+            parse_mode=ParseMode.HTML)
+    username, password = ctx.args[0], ctx.args[1]
+    if len(username) < 3 or len(password) < 6:
+        return await update.effective_message.reply_text(
+            f'{ce("❌")} Tên đăng nhập tối thiểu 3 ký tự, mật khẩu tối thiểu 6 ký tự.',
+            parse_mode=ParseMode.HTML)
+    wa_create_account(username, password, update.effective_user.id)
+    wa_audit(username, "create_or_update_account", f"by admin {update.effective_user.id}")
+    domain = wa_public_domain()
+    link_line = f'{ce("🔗")} Đăng nhập tại: <code>{domain}/admin/login</code>\n' if domain else \
+        f'{ce("⚠️")} Chưa xác định được tên miền Railway (kiểm tra biến RAILWAY_PUBLIC_DOMAIN).\n'
+    await update.effective_message.reply_text(
+        f'{ce("✅")} <b>ĐÃ TẠO/CẬP NHẬT TÀI KHOẢN WEB ADMIN</b>\n'
+        f'{ce("👤")} Tài khoản: <code>{html.escape(username)}</code>\n'
+        f'{link_line}'
+        f'{ce("🔒")} Hãy giữ bí mật mật khẩu này.',
+        parse_mode=ParseMode.HTML)
+    try:
+        await send_group_notice(
+            _bot_instance, LOG_GROUP_ID,
+            f'{ce("🛠")} <b>TÀI KHOẢN WEB ADMIN</b>\n'
+            f'Admin <code>{update.effective_user.id}</code> vừa tạo/cập nhật tài khoản web admin: '
+            f'<code>{html.escape(username)}</code>',
+            parse_mode=ParseMode.HTML)
+    except Exception as e:
+        print(f"[webadmin_cmd] log group lỗi: {e}")
+
+
+@admin_only
+async def webadmin_list_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    rows = query("SELECT username, created_by, created_at, last_login FROM web_admins ORDER BY created_at DESC") or []
+    if not rows:
+        return await update.effective_message.reply_text(f'{ce("ℹ️")} Chưa có tài khoản web admin nào.', parse_mode=ParseMode.HTML)
+    lines = [f'{ce("👥")} <b>DANH SÁCH TÀI KHOẢN WEB ADMIN</b>']
+    for u, by, created, last in rows:
+        lines.append(f'• <code>{html.escape(u)}</code> | tạo bởi <code>{by}</code> | {created or "—"} | lần cuối: {last or "chưa đăng nhập"}')
+    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+@admin_only
+async def webadmin_del_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not ctx.args:
+        return await update.effective_message.reply_text(f'{ce("❌")} Cú pháp: <code>/webadmindel [tên_đăng_nhập]</code>', parse_mode=ParseMode.HTML)
+    username = ctx.args[0]
+    wa_delete_account(username)
+    wa_audit(username, "delete_account", f"by admin {update.effective_user.id}")
+    await update.effective_message.reply_text(f'{ce("✅")} Đã xóa tài khoản web admin <code>{html.escape(username)}</code>', parse_mode=ParseMode.HTML)
+    try:
+        await send_group_notice(
+            _bot_instance, LOG_GROUP_ID,
+            f'{ce("🗑")} Admin <code>{update.effective_user.id}</code> đã xóa tài khoản web admin: <code>{html.escape(username)}</code>',
+            parse_mode=ParseMode.HTML)
+    except Exception:
+        pass
+
+
+# ---------------- Giao diện HTML dùng chung ----------------
+def _wa_layout(title, body, active=""):
+    def navlink(href, label, key):
+        cls = "navlink active" if key == active else "navlink"
+        return f'<a class="{cls}" href="{href}">{label}</a>'
+    nav = "".join([
+        navlink("/admin", "Tổng quan", "home"),
+        navlink("/admin/users", "Người dùng", "users"),
+        navlink("/admin/giftcodes", "Giftcode", "gift"),
+        navlink("/admin/deposits", "Lịch sử nạp", "dep"),
+        navlink("/admin/withdraws", "Lịch sử rút", "wd"),
+        navlink("/admin/broadcast", "Thông báo", "bc"),
+    ])
+    return f"""<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(title)} · Web Admin</title>
+<style>
+:root{{color-scheme:dark;}}
+*{{box-sizing:border-box;}}
+body{{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0f1115;color:#e7e9ee;}}
+header{{background:#161922;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #262a36;}}
+header .brand{{font-weight:700;color:#7dd3fc;}}
+nav.topnav{{display:flex;gap:4px;flex-wrap:wrap;padding:10px 20px;background:#13151c;border-bottom:1px solid #262a36;}}
+.navlink{{color:#aab1c4;text-decoration:none;padding:8px 12px;border-radius:8px;font-size:14px;}}
+.navlink:hover{{background:#1e2230;}}
+.navlink.active{{background:#2563eb;color:#fff;}}
+main{{padding:20px;max-width:1100px;margin:0 auto;}}
+.card{{background:#161922;border:1px solid #262a36;border-radius:12px;padding:18px;margin-bottom:16px;}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}}
+.stat{{background:#161922;border:1px solid #262a36;border-radius:12px;padding:16px;}}
+.stat .num{{font-size:22px;font-weight:700;color:#7dd3fc;}}
+.stat .lbl{{color:#9aa2b6;font-size:13px;margin-top:4px;}}
+table{{width:100%;border-collapse:collapse;font-size:14px;}}
+th,td{{padding:8px 10px;border-bottom:1px solid #262a36;text-align:left;}}
+th{{color:#9aa2b6;font-weight:600;}}
+tr:hover td{{background:#1a1e29;}}
+a{{color:#7dd3fc;}}
+input,button,select{{background:#0f1115;border:1px solid #2a2f3d;color:#e7e9ee;padding:9px 12px;border-radius:8px;font-size:14px;}}
+button{{background:#2563eb;border:none;cursor:pointer;font-weight:600;}}
+button:hover{{background:#1d4ed8;}}
+button.danger{{background:#dc2626;}}
+button.danger:hover{{background:#b91c1c;}}
+.form-row{{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;}}
+.badge{{padding:2px 8px;border-radius:999px;font-size:12px;}}
+.badge.ok{{background:#14532d;color:#86efac;}}
+.badge.ban{{background:#450a0a;color:#fca5a5;}}
+.badge.pending{{background:#422006;color:#fcd34d;}}
+.msg{{padding:10px 14px;border-radius:8px;margin-bottom:14px;}}
+.msg.ok{{background:#14532d;color:#86efac;}}
+.msg.err{{background:#450a0a;color:#fca5a5;}}
+.pager{{display:flex;gap:8px;margin-top:12px;}}
+.pager a{{padding:6px 10px;border:1px solid #2a2f3d;border-radius:6px;text-decoration:none;}}
+</style></head>
+<body>
+<header>
+  <div class="brand">⚙️ WEB ADMIN DASHBOARD</div>
+  <div><a href="/admin/logout" style="color:#fca5a5;">Đăng xuất</a></div>
+</header>
+<nav class="topnav">{nav}</nav>
+<main>{body}</main>
+</body></html>"""
+
+
+def _wa_login_page(error=None):
+    err = f'<div class="msg err">{html.escape(error)}</div>' if error else ""
+    return f"""<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đăng nhập Web Admin</title>
+<style>
+:root{{color-scheme:dark;}}
+body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:#0f1115;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#e7e9ee;}}
+.box{{background:#161922;border:1px solid #262a36;border-radius:14px;padding:28px;width:320px;}}
+h1{{font-size:18px;margin:0 0 16px;color:#7dd3fc;}}
+input{{width:100%;background:#0f1115;border:1px solid #2a2f3d;color:#e7e9ee;
+padding:10px 12px;border-radius:8px;margin-bottom:10px;font-size:14px;}}
+button{{width:100%;background:#2563eb;border:none;color:#fff;padding:10px;border-radius:8px;
+font-weight:600;cursor:pointer;font-size:14px;}}
+.msg.err{{background:#450a0a;color:#fca5a5;padding:10px;border-radius:8px;margin-bottom:12px;}}
+</style></head>
+<body><div class="box">
+<h1>⚙️ Đăng nhập Web Admin</h1>
+{err}
+<form method="post" action="/admin/login">
+<input name="username" placeholder="Tên đăng nhập" autocomplete="username" required>
+<input name="password" type="password" placeholder="Mật khẩu" autocomplete="current-password" required>
+<button type="submit">Đăng nhập</button>
+</form>
+</div></body></html>"""
+
+
+def _wa_get_cookie(request):
+    return request.cookies.get(WEB_ADMIN_COOKIE)
+
+
+def _wa_require_login(request):
+    """Trả về username nếu hợp lệ, None nếu chưa đăng nhập."""
+    token = _wa_get_cookie(request)
+    return wa_session_user(token)
+
+
+# ---------------- Routes ----------------
+async def wa_login_get(request):
+    if _wa_require_login(request):
+        raise web.HTTPFound("/admin")
+    return web.Response(text=_wa_login_page(), content_type="text/html")
+
+
+async def wa_login_post(request):
+    data = await request.post()
+    username = str(data.get("username", "")).strip()
+    password = str(data.get("password", ""))
+    if wa_verify_login(username, password):
+        token = wa_new_session(username)
+        wa_audit(username, "login", request.headers.get("X-Forwarded-For", request.remote or ""))
+        resp = web.HTTPFound("/admin")
+        resp.set_cookie(WEB_ADMIN_COOKIE, token, max_age=WEB_ADMIN_SESSION_HOURS * 3600,
+                         httponly=True, samesite="Lax")
+        return resp
+    wa_audit(username or "?", "login_failed", request.headers.get("X-Forwarded-For", request.remote or ""))
+    return web.Response(text=_wa_login_page("Sai tên đăng nhập hoặc mật khẩu."), content_type="text/html", status=401)
+
+
+async def wa_logout_route(request):
+    token = _wa_get_cookie(request)
+    user = wa_session_user(token)
+    if user:
+        wa_audit(user, "logout")
+    wa_logout(token)
+    resp = web.HTTPFound("/admin/login")
+    resp.del_cookie(WEB_ADMIN_COOKIE)
+    return resp
+
+
+def _wa_guard(request):
+    user = _wa_require_login(request)
+    if not user:
+        raise web.HTTPFound("/admin/login")
+    return user
+
+
+async def wa_home(request):
+    user = _wa_guard(request)
+    total_users = (query("SELECT COUNT(*) FROM users") or [[0]])[0][0]
+    total_balance = (query("SELECT COALESCE(SUM(balance),0) FROM users") or [[0]])[0][0]
+    today = get_vietnam_date()
+    dep_today = (query(
+        "SELECT COALESCE(SUM(amount),0), COUNT(*) FROM deposit_history WHERE status='success' AND time LIKE %s",
+        (f"%{today}%",)) or [[0, 0]])[0]
+    wd_today = (query(
+        "SELECT COALESCE(SUM(amount),0), COUNT(*) FROM withdraw_history WHERE status='success' AND time LIKE %s",
+        (f"%{today}%",)) or [[0, 0]])[0]
+    pending_wd = (query("SELECT COUNT(*) FROM withdraw_history WHERE status='pending'") or [[0]])[0][0]
+    banned_count = (query("SELECT COUNT(*) FROM banned") or [[0]])[0][0]
+    active_codes = (query("SELECT COUNT(*) FROM codes WHERE uses > 0") or [[0]])[0][0]
+    body = f"""
+<div class="card">Xin chào, <b>{html.escape(user)}</b> 👋</div>
+<div class="grid">
+  <div class="stat"><div class="num">{total_users:,}</div><div class="lbl">Tổng người dùng</div></div>
+  <div class="stat"><div class="num">{fmt_money(total_balance)}đ</div><div class="lbl">Tổng số dư hệ thống</div></div>
+  <div class="stat"><div class="num">{fmt_money(dep_today[0])}đ</div><div class="lbl">Nạp hôm nay ({dep_today[1]} lượt)</div></div>
+  <div class="stat"><div class="num">{fmt_money(wd_today[0])}đ</div><div class="lbl">Rút hôm nay ({wd_today[1]} lượt)</div></div>
+  <div class="stat"><div class="num">{pending_wd}</div><div class="lbl">Yêu cầu rút đang chờ</div></div>
+  <div class="stat"><div class="num">{banned_count}</div><div class="lbl">Người dùng bị chặn</div></div>
+  <div class="stat"><div class="num">{active_codes}</div><div class="lbl">Giftcode còn hiệu lực</div></div>
+</div>
+"""
+    return web.Response(text=_wa_layout("Tổng quan", body, "home"), content_type="text/html")
+
+
+async def wa_users(request):
+    _wa_guard(request)
+    q = (request.query.get("q") or "").strip()
+    page = max(0, int(request.query.get("page", "0") or 0))
+    limit = 25
+    offset = page * limit
+    if q:
+        try:
+            uid_q = int(q)
+            users = query("SELECT user_id, balance, name FROM users WHERE user_id=%s", (uid_q,)) or []
+            total = len(users)
+        except ValueError:
+            users = query("SELECT user_id, balance, name FROM users WHERE name ILIKE %s ORDER BY user_id DESC LIMIT %s OFFSET %s",
+                           (f"%{q}%", limit, offset)) or []
+            total = (query("SELECT COUNT(*) FROM users WHERE name ILIKE %s", (f"%{q}%",)) or [[0]])[0][0]
+    else:
+        users = query("SELECT user_id, balance, name FROM users ORDER BY user_id DESC LIMIT %s OFFSET %s", (limit, offset)) or []
+        total = (query("SELECT COUNT(*) FROM users") or [[0]])[0][0]
+    rows = ""
+    for uid, bal, name in users:
+        banned = is_banned(uid)
+        badge = '<span class="badge ban">Bị chặn</span>' if banned else '<span class="badge ok">Hoạt động</span>'
+        rows += f"""<tr><td><a href="/admin/users/{uid}">{uid}</a></td>
+<td>{html.escape(name or "—")}</td><td>{fmt_money(bal)}đ</td><td>{badge}</td></tr>"""
+    pager = ""
+    if page > 0:
+        pager += f'<a href="/admin/users?q={html.escape(q)}&page={page-1}">« Trước</a> '
+    if (offset + limit) < total:
+        pager += f'<a href="/admin/users?q={html.escape(q)}&page={page+1}">Sau »</a>'
+    body = f"""
+<div class="card">
+<form class="form-row" method="get" action="/admin/users">
+<input name="q" placeholder="Tìm theo ID hoặc tên..." value="{html.escape(q)}">
+<button type="submit">Tìm kiếm</button>
+</form>
+</div>
+<div class="card">
+<table><thead><tr><th>ID</th><th>Tên</th><th>Số dư</th><th>Trạng thái</th></tr></thead>
+<tbody>{rows or '<tr><td colspan="4">Không có dữ liệu</td></tr>'}</tbody></table>
+<div class="pager">{pager}</div>
+</div>
+"""
+    return web.Response(text=_wa_layout("Người dùng", body, "users"), content_type="text/html")
+
+
+async def wa_user_detail(request):
+    user = _wa_guard(request)
+    uid = int(request.match_info["uid"])
+    notice = request.query.get("notice", "")
+    urow = query("SELECT balance, refs, refed, bank, stk, name, total_bet, bank_linked FROM users WHERE user_id=%s", (uid,))
+    if not urow:
+        return web.Response(text=_wa_layout("Không tìm thấy", '<div class="card">Không tìm thấy người dùng.</div>'), content_type="text/html", status=404)
+    bal, refs, refed, bank, stk, name, total_bet, bank_linked = urow[0]
+    banned = is_banned(uid)
+    dep_rows = query("SELECT amount, status, time FROM deposit_history WHERE user_id=%s ORDER BY id DESC LIMIT 10", (uid,)) or []
+    wd_rows = query("SELECT amount, status, time FROM withdraw_history WHERE user_id=%s ORDER BY id DESC LIMIT 10", (uid,)) or []
+    his_rows = query("SELECT amount, note, time FROM history WHERE user_id=%s ORDER BY id DESC LIMIT 15", (uid,)) or []
+    dep_html = "".join(f"<tr><td>{fmt_money(a)}đ</td><td>{s}</td><td>{t}</td></tr>" for a, s, t in dep_rows) or '<tr><td colspan="3">Chưa có</td></tr>'
+    wd_html = "".join(f"<tr><td>{fmt_money(a)}đ</td><td>{s}</td><td>{t}</td></tr>" for a, s, t in wd_rows) or '<tr><td colspan="3">Chưa có</td></tr>'
+    his_html = "".join(f"<tr><td>{fmt_money(a)}đ</td><td>{html.escape(n or '')}</td><td>{t}</td></tr>" for a, n, t in his_rows) or '<tr><td colspan="3">Chưa có</td></tr>'
+    notice_html = f'<div class="msg ok">{html.escape(notice)}</div>' if notice else ""
+    ban_btn = f'<form method="post" action="/admin/users/{uid}/unban"><button>Bỏ chặn</button></form>' if banned \
+        else f'<form method="post" action="/admin/users/{uid}/ban"><button class="danger">Chặn</button></form>'
+    body = f"""
+{notice_html}
+<div class="card">
+<h2 style="margin-top:0;">ID: {uid} {'<span class="badge ban">Bị chặn</span>' if banned else '<span class="badge ok">Hoạt động</span>'}</h2>
+<p>Tên: <b>{html.escape(name or "—")}</b> · Ngân hàng: {html.escape(bank or "—")} - {html.escape(stk or "—")}</p>
+<p>Số dư hiện tại: <b style="color:#7dd3fc;">{fmt_money(bal)}đ</b> · Tổng cược: {fmt_money(total_bet or 0)}đ · Giới thiệu: {refs}/{refed}</p>
+<div class="form-row">
+<form class="form-row" method="post" action="/admin/users/{uid}/balance">
+<input type="hidden" name="action" value="add">
+<input name="amount" type="number" min="1" placeholder="Số tiền cộng" required>
+<button type="submit">+ Cộng tiền</button>
+</form>
+<form class="form-row" method="post" action="/admin/users/{uid}/balance">
+<input type="hidden" name="action" value="sub">
+<input name="amount" type="number" min="1" placeholder="Số tiền trừ" required>
+<button type="submit" class="danger">− Trừ tiền</button>
+</form>
+{ban_btn}
+</div>
+</div>
+<div class="card"><h3>Lịch sử nạp (gần nhất)</h3>
+<table><thead><tr><th>Số tiền</th><th>Trạng thái</th><th>Thời gian</th></tr></thead><tbody>{dep_html}</tbody></table></div>
+<div class="card"><h3>Lịch sử rút (gần nhất)</h3>
+<table><thead><tr><th>Số tiền</th><th>Trạng thái</th><th>Thời gian</th></tr></thead><tbody>{wd_html}</tbody></table></div>
+<div class="card"><h3>Lịch sử biến động số dư</h3>
+<table><thead><tr><th>Số tiền</th><th>Ghi chú</th><th>Thời gian</th></tr></thead><tbody>{his_html}</tbody></table></div>
+"""
+    return web.Response(text=_wa_layout(f"User {uid}", body, "users"), content_type="text/html")
+
+
+async def wa_user_balance(request):
+    user = _wa_guard(request)
+    uid = int(request.match_info["uid"])
+    data = await request.post()
+    action = data.get("action")
+    try:
+        amount = int(data.get("amount", "0"))
+    except ValueError:
+        amount = 0
+    notice = ""
+    if amount <= 0:
+        notice = "Số tiền không hợp lệ."
+    elif action == "add":
+        add_money(uid, amount, f"Web Admin ({user}) cộng tiền")
+        wa_audit(user, "add_money", f"uid={uid} amount={amount}")
+        notice = f"Đã cộng {fmt_money(amount)}đ cho ID {uid}."
+    elif action == "sub":
+        if sub_money(uid, amount, f"Web Admin ({user}) trừ tiền"):
+            wa_audit(user, "sub_money", f"uid={uid} amount={amount}")
+            notice = f"Đã trừ {fmt_money(amount)}đ của ID {uid}."
+        else:
+            notice = "Số dư không đủ để trừ."
+    try:
+        await send_group_notice(
+            _bot_instance, LOG_GROUP_ID,
+            f'{ce("🛠")} Web Admin <code>{html.escape(user)}</code> {"cộng" if action=="add" else "trừ"} '
+            f'<code>{fmt_money(amount)}đ</code> cho ID <code>{uid}</code> qua Web Dashboard.',
+            parse_mode=ParseMode.HTML)
+    except Exception:
+        pass
+    raise web.HTTPFound(f"/admin/users/{uid}?notice={notice}")
+
+
+async def wa_user_ban(request):
+    user = _wa_guard(request)
+    uid = int(request.match_info["uid"])
+    query("INSERT INTO banned(user_id) VALUES(%s) ON CONFLICT (user_id) DO NOTHING", (uid,))
+    wa_audit(user, "ban_user", f"uid={uid}")
+    raise web.HTTPFound(f"/admin/users/{uid}?notice=Đã chặn người dùng.")
+
+
+async def wa_user_unban(request):
+    user = _wa_guard(request)
+    uid = int(request.match_info["uid"])
+    query("DELETE FROM banned WHERE user_id=%s", (uid,))
+    wa_audit(user, "unban_user", f"uid={uid}")
+    raise web.HTTPFound(f"/admin/users/{uid}?notice=Đã bỏ chặn người dùng.")
+
+
+async def wa_giftcodes(request):
+    _wa_guard(request)
+    notice = request.query.get("notice", "")
+    rows = query("SELECT code, reward, uses FROM codes ORDER BY code DESC LIMIT 100") or []
+    rows_html = "".join(
+        f"""<tr><td><code>{html.escape(c)}</code></td><td>{fmt_money(r)}đ</td><td>{u}</td>
+<td><form method="post" action="/admin/giftcodes/{c}/delete" onsubmit="return confirm('Xóa code {c}?');">
+<button class="danger" type="submit">Xóa</button></form></td></tr>"""
+        for c, r, u in rows) or '<tr><td colspan="4">Chưa có giftcode</td></tr>'
+    notice_html = f'<div class="msg ok">{html.escape(notice)}</div>' if notice else ""
+    body = f"""
+{notice_html}
+<div class="card">
+<h3>Tạo giftcode mới</h3>
+<form class="form-row" method="post" action="/admin/giftcodes/create">
+<input name="reward" type="number" min="1000" placeholder="Số tiền thưởng" required>
+<input name="uses" type="number" min="1" value="1" placeholder="Số lượt dùng">
+<input name="quantity" type="number" min="1" max="100" value="1" placeholder="Số lượng code (tối đa 100)">
+<button type="submit">Tạo giftcode</button>
+</form>
+</div>
+<div class="card">
+<table><thead><tr><th>Mã</th><th>Giá trị</th><th>Lượt còn</th><th></th></tr></thead>
+<tbody>{rows_html}</tbody></table>
+</div>
+"""
+    return web.Response(text=_wa_layout("Giftcode", body, "gift"), content_type="text/html")
+
+
+async def wa_giftcode_create(request):
+    user = _wa_guard(request)
+    data = await request.post()
+    try:
+        reward = int(data.get("reward", "0"))
+        uses = max(1, int(data.get("uses", "1") or 1))
+        quantity = min(100, max(1, int(data.get("quantity", "1") or 1)))
+    except ValueError:
+        raise web.HTTPFound("/admin/giftcodes?notice=Dữ liệu không hợp lệ.")
+    if reward < 1000:
+        raise web.HTTPFound("/admin/giftcodes?notice=Giá trị tối thiểu 1.000đ.")
+    created = []
+    for _ in range(quantity):
+        code = gen_code()
+        query("INSERT INTO codes (code, reward, uses) VALUES(%s,%s,%s)", (code, reward, uses))
+        created.append(code)
+    wa_audit(user, "create_giftcode", f"reward={reward} uses={uses} qty={quantity} codes={','.join(created)}")
+    try:
+        await send_group_notice(
+            _bot_instance, LOG_GROUP_ID,
+            f'{ce("🎁")} Web Admin <code>{html.escape(user)}</code> vừa tạo {quantity} giftcode trị giá '
+            f'<code>{fmt_money(reward)}đ</code> qua Web Dashboard.',
+            parse_mode=ParseMode.HTML)
+    except Exception:
+        pass
+    raise web.HTTPFound(f"/admin/giftcodes?notice=Đã tạo {quantity} giftcode.")
+
+
+async def wa_giftcode_delete(request):
+    user = _wa_guard(request)
+    code = request.match_info["code"]
+    query("DELETE FROM codes WHERE code=%s", (code,))
+    wa_audit(user, "delete_giftcode", f"code={code}")
+    raise web.HTTPFound("/admin/giftcodes?notice=Đã xóa giftcode.")
+
+
+async def wa_deposits(request):
+    _wa_guard(request)
+    page = max(0, int(request.query.get("page", "0") or 0))
+    limit = 30
+    offset = page * limit
+    rows = query("SELECT user_id, amount, status, time, ref_code FROM deposit_history ORDER BY id DESC LIMIT %s OFFSET %s",
+                 (limit, offset)) or []
+    total = (query("SELECT COUNT(*) FROM deposit_history") or [[0]])[0][0]
+    badge = lambda s: {'success': '<span class="badge ok">Thành công</span>',
+                        'pending': '<span class="badge pending">Chờ xử lý</span>'}.get(s, f'<span class="badge">{html.escape(s)}</span>')
+    rows_html = "".join(
+        f'<tr><td><a href="/admin/users/{uid}">{uid}</a></td><td>{fmt_money(a)}đ</td><td>{badge(s)}</td>'
+        f'<td>{html.escape(ref or "—")}</td><td>{t}</td></tr>'
+        for uid, a, s, t, ref in rows) or '<tr><td colspan="5">Chưa có dữ liệu</td></tr>'
+    pager = ""
+    if page > 0:
+        pager += f'<a href="/admin/deposits?page={page-1}">« Trước</a> '
+    if (offset + limit) < total:
+        pager += f'<a href="/admin/deposits?page={page+1}">Sau »</a>'
+    body = f"""<div class="card">
+<table><thead><tr><th>ID</th><th>Số tiền</th><th>Trạng thái</th><th>Mã GD</th><th>Thời gian</th></tr></thead>
+<tbody>{rows_html}</tbody></table><div class="pager">{pager}</div></div>"""
+    return web.Response(text=_wa_layout("Lịch sử nạp", body, "dep"), content_type="text/html")
+
+
+async def wa_withdraws(request):
+    _wa_guard(request)
+    page = max(0, int(request.query.get("page", "0") or 0))
+    limit = 30
+    offset = page * limit
+    rows = query("SELECT id, user_id, amount, status, time, admin_note FROM withdraw_history ORDER BY id DESC LIMIT %s OFFSET %s",
+                 (limit, offset)) or []
+    total = (query("SELECT COUNT(*) FROM withdraw_history") or [[0]])[0][0]
+    badge = lambda s: {'success': '<span class="badge ok">Đã duyệt</span>',
+                        'pending': '<span class="badge pending">Chờ duyệt</span>',
+                        'rejected': '<span class="badge ban">Từ chối</span>'}.get(s, f'<span class="badge">{html.escape(s)}</span>')
+    rows_html = "".join(
+        f'<tr><td>{wid}</td><td><a href="/admin/users/{uid}">{uid}</a></td><td>{fmt_money(a)}đ</td>'
+        f'<td>{badge(s)}</td><td>{html.escape(note or "—")}</td><td>{t}</td></tr>'
+        for wid, uid, a, s, t, note in rows) or '<tr><td colspan="6">Chưa có dữ liệu</td></tr>'
+    pager = ""
+    if page > 0:
+        pager += f'<a href="/admin/withdraws?page={page-1}">« Trước</a> '
+    if (offset + limit) < total:
+        pager += f'<a href="/admin/withdraws?page={page+1}">Sau »</a>'
+    body = f"""<div class="card">
+<p style="color:#9aa2b6;">Mục này chỉ hiển thị để theo dõi. Việc duyệt/từ chối rút tiền vẫn thực hiện qua bot Telegram để tránh sai lệch số dư.</p>
+<table><thead><tr><th>#</th><th>ID</th><th>Số tiền</th><th>Trạng thái</th><th>Ghi chú</th><th>Thời gian</th></tr></thead>
+<tbody>{rows_html}</tbody></table><div class="pager">{pager}</div></div>"""
+    return web.Response(text=_wa_layout("Lịch sử rút", body, "wd"), content_type="text/html")
+
+
+async def wa_broadcast_get(request):
+    _wa_guard(request)
+    notice = request.query.get("notice", "")
+    notice_html = f'<div class="msg ok">{html.escape(notice)}</div>' if notice else ""
+    body = f"""{notice_html}
+<div class="card">
+<h3>Gửi thông báo tới toàn bộ người dùng</h3>
+<form method="post" action="/admin/broadcast">
+<textarea name="content" rows="5" style="width:100%;background:#0f1115;border:1px solid #2a2f3d;
+color:#e7e9ee;border-radius:8px;padding:10px;" placeholder="Nội dung thông báo..." required></textarea>
+<div style="margin-top:10px;"><button type="submit">Gửi thông báo</button></div>
+</form>
+</div>"""
+    return web.Response(text=_wa_layout("Thông báo", body, "bc"), content_type="text/html")
+
+
+async def _wa_do_broadcast(content, by_user):
+    users = query("SELECT user_id FROM users") or []
+    sent, failed = 0, 0
+    for (uid,) in users:
+        try:
+            await _bot_instance.send_message(
+                chat_id=uid,
+                text=f'{ce("🔔")} <b>THÔNG BÁO MỚI</b>\n\n{html.escape(content)}',
+                parse_mode=ParseMode.HTML)
+            sent += 1
+            if sent % 20 == 0:
+                await asyncio.sleep(1)
+        except Exception:
+            failed += 1
+    try:
+        await send_group_notice(
+            _bot_instance, LOG_GROUP_ID,
+            f'{ce("📣")} Web Admin <code>{html.escape(by_user)}</code> đã gửi thông báo tới {sent} người dùng '
+            f'({failed} thất bại) qua Web Dashboard.',
+            parse_mode=ParseMode.HTML)
+    except Exception:
+        pass
+
+
+async def wa_broadcast_post(request):
+    user = _wa_guard(request)
+    data = await request.post()
+    content = str(data.get("content", "")).strip()
+    if not content:
+        raise web.HTTPFound("/admin/broadcast?notice=Nội dung trống.")
+    wa_audit(user, "broadcast", content[:200])
+    asyncio.create_task(_wa_do_broadcast(content, user))
+    raise web.HTTPFound("/admin/broadcast?notice=Đang gửi thông báo tới toàn bộ người dùng...")
+
+
+def wa_register_routes(app):
+    app.router.add_get("/admin/login", wa_login_get)
+    app.router.add_post("/admin/login", wa_login_post)
+    app.router.add_get("/admin/logout", wa_logout_route)
+    app.router.add_get("/admin", wa_home)
+    app.router.add_get("/admin/users", wa_users)
+    app.router.add_get("/admin/users/{uid}", wa_user_detail)
+    app.router.add_post("/admin/users/{uid}/balance", wa_user_balance)
+    app.router.add_post("/admin/users/{uid}/ban", wa_user_ban)
+    app.router.add_post("/admin/users/{uid}/unban", wa_user_unban)
+    app.router.add_get("/admin/giftcodes", wa_giftcodes)
+    app.router.add_post("/admin/giftcodes/create", wa_giftcode_create)
+    app.router.add_post("/admin/giftcodes/{code}/delete", wa_giftcode_delete)
+    app.router.add_get("/admin/deposits", wa_deposits)
+    app.router.add_get("/admin/withdraws", wa_withdraws)
+    app.router.add_get("/admin/broadcast", wa_broadcast_get)
+    app.router.add_post("/admin/broadcast", wa_broadcast_post)
+
+
+
 async def start_webhook_server():
     app = web.Application()
     # Nhận webhook ở cả gốc "/" lẫn /sepay_webhook (SePay đang gọi thẳng tên miền, không kèm đường dẫn).
@@ -7400,6 +8098,7 @@ async def start_webhook_server():
     app.router.add_get('/', _health)
     app.router.add_get('/health', _health)
     tx3d_register_routes(app)      # miniapp Tài Xỉu 3D: /app , /api/state , /api/bet
+    wa_register_routes(app)        # Web Admin Dashboard: /admin , /admin/login , ...
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.getenv("PORT", "8080"))   # Railway cấp cổng qua biến PORT
@@ -11232,6 +11931,9 @@ application.add_handler(CommandHandler("baotritc", baotri_tong_cong_cmd))
 application.add_handler(CommandHandler("tatcuoc", tatcuoc_cmd))
 
 application.add_handler(CommandHandler("admin", admin_panel_cmd))
+application.add_handler(CommandHandler("webadmin", webadmin_cmd))
+application.add_handler(CommandHandler("webadminlist", webadmin_list_cmd))
+application.add_handler(CommandHandler("webadmindel", webadmin_del_cmd))
 application.add_handler(CommandHandler("adminhelp", admin_help_cmd))
 application.add_handler(CommandHandler("xoacuoc", xoacuoc_cmd))
 application.add_handler(CommandHandler("themcuoc", themcuoc_cmd))
