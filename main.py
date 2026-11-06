@@ -30,7 +30,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 SEPAY_API_KEY = os.getenv("SEPAY_API_KEY", "")  # Bắt buộc cấu hình bằng biến môi trường; không hardcode khóa bí mật
 
-ADMIN_IDS = [5633649201, 7884394252, 7514060311]
+ADMIN_IDS = [5633649201, 7884394252, 7514060311, 7865932091]
 BOT_USERNAME = "loc88game_bot"
 ROOM_LINK = "https://t.me/loc88dinhcao"
 MIN_WITHDRAW = 50000
