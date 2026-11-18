@@ -31,14 +31,14 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 SEPAY_API_KEY = os.getenv("SEPAY_API_KEY", "")  # Bắt buộc cấu hình bằng biến môi trường; không hardcode khóa bí mật
 
 ADMIN_IDS = [9220244280, 8543763915, 8682451039]
-BOT_USERNAME = "no99_gamebot"
+BOT_USERNAME = "meobeo88_bot"
 ROOM_LINK = "https://t.me/Chatmeobeo88"
 MIN_WITHDRAW = 100000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
 LOG_GROUP_ID = -1004434938082
 
 # THÔNG TIN NGÂN HÀNG MỚI
-BANK_ID = "970423"
+BANK_ID = "TPB"
 ACCOUNT_NO = "10006353242"
 ACCOUNT_NAME = "LUC TUAN HUNG"
 
@@ -2858,7 +2858,7 @@ async def run_dice_game_cycle(bot, group_id: int, chat_id: int):
                 try:
                     new_stats_msg = await bot.send_message(chat_id, stats_text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([
                         [btn('NẠP TIỀN TẠI ĐÂY', '💰', url=f'https://t.me/{BOT_USERNAME}?start=nap')],
-                        [btn('BOT CHƠI GAME', '🎮', url='https://t.me/no99_gamebot')],
+                        [btn('BOT CHƠI GAME', '🎮', url=f'https://t.me/{BOT_USERNAME}')],
                         [btn('CHƠI TÀI XỈU 3D NGAY', '🎮', url=f'https://t.me/{BOT_USERNAME}?start=tx3d')]
                     ]))
                     stats_msg_id = new_stats_msg.message_id
@@ -4712,7 +4712,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [btn("Nhận thưởng", "🎉", callback_data="acc_nhan_thuong"), btn("Chuyển tiền", "💸", callback_data="acc_chuyen_tien")],
             [btn("VIP", "👑", callback_data="acc_vip"), btn("Fan cứng +30k", "🔥", callback_data="acc_fan_cung")],
             [btn("Tích lũy nạp", "💎", callback_data="acc_tich_luy"), btn("Kết Sát", "🔐", callback_data="acc_ket_sat")],
-            [btn("Hỗ trợ", "🆘", url="https://t.me/minhnhut_1")]
+            [btn("Hỗ trợ", "🆘", url="https://t.me/ongtrumtelevip")]
         ])
 
         msg = (
@@ -7081,7 +7081,7 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if d.startswith("dep_"):
         if d == "dep_support":
             await q.answer()
-            return await q.message.reply_text(f'{ce("🔔")} <b>HỖ TRỢ NẠP TIỀN</b>\n\nVui lòng liên hệ Admin: @minhnhut_1\nHoặc dùng lệnh <code>/nap [số_tiền]</code> để tạo QR.', parse_mode=ParseMode.HTML)
+            return await q.message.reply_text(f'{ce("🔔")} <b>HỖ TRỢ NẠP TIỀN</b>\n\nVui lòng liên hệ Admin: @ongtrumtelevip\nHoặc dùng lệnh <code>/nap [số_tiền]</code> để tạo QR.', parse_mode=ParseMode.HTML)
         try:
             await q.answer()
             amount = int(d.split("_")[1])
