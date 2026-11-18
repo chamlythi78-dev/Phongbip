@@ -7421,6 +7421,299 @@ async def sepay_webhook(request):
         traceback.print_exc()
         return web.Response(status=500, text="Internal Server Error")
 
+WEB_ADMIN_HTML = r'''<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PhongBip • Admin</title><style>
+:root{--bg:#0b1020;--panel:#121a2d;--panel2:#18233b;--line:#263451;--muted:#91a0bb;--txt:#edf3ff;--blue:#648cff;--green:#36c98b;--red:#ff647c;--gold:#f4c66a}*{box-sizing:border-box}body{margin:0;background:radial-gradient(1000px 500px at 80% -10%,#243967 0%,transparent 60%),var(--bg);color:var(--txt);font:14px Inter,system-ui,Arial}button,input,select{font:inherit}button{cursor:pointer;border:0;border-radius:10px;padding:10px 14px;background:var(--blue);color:white;font-weight:700}button.secondary{background:#263653}button.danger{background:#9e3048}button.good{background:#167a59}.wrap{max-width:1400px;margin:auto;padding:22px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}.brand{font-size:22px;font-weight:900}.brand span{color:var(--blue)}.muted{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:linear-gradient(145deg,var(--panel),#10182a);border:1px solid var(--line);border-radius:16px;padding:17px;box-shadow:0 12px 30px #0002}.kpi{font-size:25px;font-weight:900;margin-top:8px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}.tabs button{background:var(--panel2);border:1px solid var(--line)}.tabs button.active{background:var(--blue)}.section{display:none}.section.active{display:block}.row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.field{background:#0b1426;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:11px;min-width:0}.field.grow{flex:1;min-width:190px}table{width:100%;border-collapse:collapse;min-width:700px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:12px;text-transform:uppercase}td{font-size:13px}.tablebox{overflow:auto;margin-top:14px}.pill{padding:4px 8px;border-radius:20px;background:#24324b;color:#b8c8e5}.ok{color:var(--green)}.bad{color:var(--red)}.two{display:grid;grid-template-columns:1.3fr 1fr;gap:14px}.hide{display:none!important}.login{max-width:420px;margin:12vh auto}.login h1{font-size:27px}.login .field{width:100%;margin:7px 0}.login button{width:100%;margin-top:10px}.notice{padding:11px;border-radius:10px;background:#17243b;color:#cbd8f1;margin:10px 0}.modal{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:15px}.modal>div{width:min(650px,100%);max-height:90vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}.modal.show{display:flex}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.small{font-size:12px}.toast{position:fixed;bottom:18px;right:18px;background:#1d2d49;padding:12px 16px;border-radius:12px;display:none;z-index:9}.toast.show{display:block}@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.two{grid-template-columns:1fr}}@media(max-width:520px){.wrap{padding:13px}.grid{gap:8px}.card{padding:13px}.kpi{font-size:20px}.top{align-items:flex-start}.brand{font-size:18px}}
+</style></head><body><div id="login" class="wrap login"><div class="card"><div class="brand">PHONGBIP <span>ADMIN</span></div><h1>Đăng nhập quản trị</h1><p class="muted">Khu vực dành riêng cho quản trị viên.</p><input id="username" class="field" autocomplete="username" placeholder="Tên đăng nhập"><input id="password" class="field" type="password" autocomplete="current-password" placeholder="Mật khẩu"><button onclick="loginNow()">Đăng nhập</button><div id="loginerr" class="notice hide"></div></div></div>
+<div id="app" class="wrap hide"><div class="top"><div><div class="brand">PHONGBIP <span>CONTROL</span></div><div class="muted small">Bảng điều khiển hệ thống</div></div><button class="secondary" onclick="logoutNow()">Đăng xuất</button></div>
+<div class="grid" id="kpis"><div class="card">Người dùng<div class="kpi" id="kUsers">—</div></div><div class="card">Tổng số dư<div class="kpi" id="kBalance">—</div></div><div class="card">Nạp thành công<div class="kpi" id="kDeposit">—</div></div><div class="card">Rút thành công<div class="kpi" id="kWithdraw">—</div></div></div>
+<div class="tabs"><button class="active" data-tab="overview">Tổng quan</button><button data-tab="users">Người dùng</button><button data-tab="transactions">Nạp / Rút</button><button data-tab="codes">Giftcode</button><button data-tab="system">Hệ thống</button></div>
+<section id="overview" class="section active"><div class="two"><div class="card"><h3>Giao dịch gần đây</h3><div id="recent" class="tablebox"></div></div><div class="card"><h3>Trạng thái hệ thống</h3><div id="sysinfo" class="muted">Đang tải...</div></div></div></section>
+<section id="users" class="section"><div class="card"><h3>Quản lý người dùng</h3><div class="row"><input id="userq" class="field grow" placeholder="Tìm ID / tên / STK"><button onclick="searchUsers()">Tìm kiếm</button><button class="secondary" onclick="searchUsers(true)">Tải mới</button></div><div id="userresults" class="tablebox"></div></div><div id="userdetail" class="card hide" style="margin-top:14px"></div></section>
+<section id="transactions" class="section"><div class="card"><h3>Lịch sử nạp tiền</h3><div id="deposits" class="tablebox"></div></div><div class="card" style="margin-top:14px"><h3>Lịch sử rút tiền</h3><div id="withdrawals" class="tablebox"></div></div></section>
+<section id="codes" class="section"><div class="two"><div class="card"><h3>Tạo giftcode</h3><input id="cCode" class="field" style="width:100%" placeholder="Mã code (để trống tự tạo)"><input id="cReward" class="field" style="width:100%;margin-top:8px" type="number" min="1" placeholder="Số tiền thưởng (đ)"><input id="cWager" class="field" style="width:100%;margin-top:8px" type="number" min="1" value="1" placeholder="Vòng cược"><button style="margin-top:10px" onclick="createCode()">Tạo giftcode</button><div class="notice small">Mã tạo từ web sẽ dùng chung bảng giftcodes với bot.</div></div><div class="card"><h3>Giftcode mới nhất</h3><div id="codelist" class="tablebox"></div></div></div></section>
+<section id="system" class="section"><div class="card"><h3>Cấu hình / bảo trì</h3><div id="settings" class="tablebox"></div></div></section></div>
+<div id="modal" class="modal" onclick="if(event.target===this)this.classList.remove('show')"><div><div class="row" style="justify-content:space-between"><h3 id="modalTitle">Xác nhận</h3><button class="secondary" onclick="document.getElementById('modal').classList.remove('show')">Đóng</button></div><div id="modalBody"></div></div></div><div id="toast" class="toast"></div>
+<script>
+const $=id=>document.getElementById(id), money=n=>(Number(n)||0).toLocaleString('vi-VN')+' đ';
+async function api(path,body){const post=body!==undefined;let r=await fetch('/admin/api/'+path,{method:post?'POST':'GET',headers:post?{'Content-Type':'application/json'}:{},body:post?JSON.stringify(body):undefined,credentials:'same-origin'});let j=await r.json().catch(()=>({error:'Lỗi máy chủ'}));if(r.status===401){showLogin();throw Error('Phiên đăng nhập hết hạn')}if(!r.ok)throw Error(j.error||'Có lỗi xảy ra');return j}
+function toast(t){$('toast').textContent=t;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2800)}
+function showLogin(){$('app').classList.add('hide');$('login').classList.remove('hide')};function showApp(){$('login').classList.add('hide');$('app').classList.remove('hide');loadAll()}
+async function loginNow(){try{await api('login',{username:$('username').value,password:$('password').value});$('loginerr').classList.add('hide');showApp()}catch(e){$('loginerr').textContent=e.message;$('loginerr').classList.remove('hide')}}
+async function logoutNow(){await api('logout',{}).catch(()=>{});showLogin()}
+async function init(){try{await api('me');showApp()}catch(e){showLogin()}}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.section').forEach(x=>x.classList.toggle('active',x.id===b.dataset.tab));});
+function table(headers,rows){return '<table><thead><tr>'+headers.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
+async function loadAll(){try{let d=await api('dashboard');$('kUsers').textContent=d.users.toLocaleString('vi-VN');$('kBalance').textContent=money(d.balance);$('kDeposit').textContent=money(d.deposit);$('kWithdraw').textContent=money(d.withdraw);$('recent').innerHTML=table(['Loại','ID','Số tiền','Trạng thái','Thời gian'],d.recent.map(x=>[x.kind,x.user_id,money(x.amount),x.status,x.time||'—']));$('sysinfo').innerHTML='Bot / database: <b class="ok">Đã kết nối</b><br>Admin panel: <b class="ok">Đang hoạt động</b><br>Thời gian: '+d.time;await searchUsers();await loadTransactions();await loadCodes();await loadSettings()}catch(e){toast(e.message)}}
+async function searchUsers(refresh){let q=refresh?'':$('userq').value;try{let d=await api('users?q='+encodeURIComponent(q));$('userresults').innerHTML=table(['User ID','Tên','Số dư','Tổng cược','Trạng thái',''],d.users.map(u=>[u.user_id,u.name||'—',money(u.balance),money(u.total_bet),u.banned?'<span class="bad">Đã khóa</span>':'<span class="ok">Hoạt động</span>','<button class="secondary" onclick="openUser('+u.user_id+')">Chi tiết</button>']))}catch(e){toast(e.message)}}
+async function openUser(id){try{let u=await api('user/'+id);$('userdetail').classList.remove('hide');$('userdetail').innerHTML='<div class="row" style="justify-content:space-between"><h3>Hồ sơ #'+u.user_id+'</h3><span class="pill">'+(u.banned?'Đã khóa':'Hoạt động')+'</span></div><div class="grid"><div>Số dư<div class="kpi">'+money(u.balance)+'</div></div><div>Tổng nạp<div class="kpi">'+money(u.deposit)+'</div></div><div>Tổng rút<div class="kpi">'+money(u.withdraw)+'</div></div><div>Tổng cược<div class="kpi">'+money(u.total_bet)+'</div></div></div><p>Ngân hàng: '+(u.bank||'—')+' · STK: '+(u.stk||'—')+' · Chủ TK: '+(u.name||'—')+'</p><div class="actions"><button onclick="balanceForm('+id+',\'add\')">Cộng tiền</button><button class="danger" onclick="balanceForm('+id+',\'sub\')">Trừ tiền</button><button class="'+(u.banned?'good':'danger')+'" onclick="toggleBan('+id+','+(!u.banned)+')">'+(u.banned?'Mở khóa':'Khóa tài khoản')+'</button><button class="secondary" onclick="toggleFeature('+id+',\'nap\', '+u.blocked_features.includes('nap')+')">'+(u.blocked_features.includes('nap')?'Mở nạp':'Khóa nạp')+'</button><button class="secondary" onclick="toggleFeature('+id+',\'rut\', '+u.blocked_features.includes('rut')+')">'+(u.blocked_features.includes('rut')?'Mở rút':'Khóa rút')+'</button></div><h4>Tài khoản nhận tiền đã liên kết</h4>'+table(['Phương thức','Ngân hàng','Số TK / SĐT','Chủ TK','Mặc định'],u.payout_accounts.map(a=>[a.method,a.bank_code||'—',a.account_number,a.account_name,a.is_default?'Có':'Không']))+'<h4>Biến động số dư gần đây</h4>'+table(['Số tiền','Nội dung','Thời gian'],u.history.map(h=>[money(h.amount),h.note||'—',h.time||'—']))}catch(e){toast(e.message)}}
+function balanceForm(id,kind){$('modalTitle').textContent=(kind==='add'?'Cộng':'Trừ')+' tiền cho '+id;$('modalBody').innerHTML='<input id="amt" class="field" style="width:100%" type="number" min="1" placeholder="Số tiền (đ)"><input id="reason" class="field" style="width:100%;margin-top:8px" placeholder="Lý do điều chỉnh"><div class="actions"><button onclick="changeBalance('+id+',\''+kind+'\')">Xác nhận</button></div>';$('modal').classList.add('show')}
+async function changeBalance(id,kind){try{await api('balance',{user_id:id,amount:Number($('amt').value),action:kind,reason:$('reason').value});$('modal').classList.remove('show');toast('Đã cập nhật số dư');await openUser(id);await searchUsers()}catch(e){toast(e.message)}}
+async function toggleFeature(id,feature,blocked){try{await api('feature',{user_id:id,feature,blocked:!blocked});toast('Đã cập nhật quyền '+feature);await openUser(id)}catch(e){toast(e.message)}}
+async function toggleBan(id,ban){if(!confirm((ban?'Khóa':'Mở khóa')+' tài khoản '+id+'?'))return;try{await api('ban',{user_id:id,banned:ban});toast('Đã cập nhật trạng thái');await openUser(id);await searchUsers()}catch(e){toast(e.message)}}
+async function loadTransactions(){let d=await api('transactions');$('deposits').innerHTML=table(['Mã','User','Tiền','Trạng thái','Thời gian'],d.deposits.map(x=>[x.id,x.user_id,money(x.amount),x.status,x.time||'—']));$('withdrawals').innerHTML=table(['Mã','User','Tiền','Trạng thái','Thời gian','Xử lý'],d.withdrawals.map(x=>[x.id,x.user_id,money(x.amount),x.status,x.time||'—',x.status==='pending'?'<button class=\"good\" onclick=\"withdrawAction('+x.id+',\'approve\')\">Đã chuyển</button> <button class=\"danger\" onclick=\"withdrawAction('+x.id+',\'reject\')\">Từ chối + hoàn</button>':'—']))}
+async function createCode(){try{let d=await api('code',{code:$('cCode').value,reward:Number($('cReward').value),wager:Number($('cWager').value),uses:1});toast('Đã tạo code '+d.code);$('cCode').value='';await loadCodes()}catch(e){toast(e.message)}}
+async function withdrawAction(id,action){let label=action==='approve'?'đánh dấu đã chuyển tiền':'từ chối và hoàn tiền';if(!confirm('Bạn chắc chắn muốn '+label+' cho yêu cầu #'+id+'?'))return;try{await api('withdraw',{id,action});toast('Đã cập nhật yêu cầu rút');await loadTransactions();await loadAll()}catch(e){toast(e.message)}}
+async function deleteCode(code){if(!confirm('Xóa giftcode '+code+'?'))return;try{await api('code/delete',{code});toast('Đã xóa giftcode');await loadCodes()}catch(e){toast(e.message)}}
+async function loadCodes(){let d=await api('codes');$('codelist').innerHTML=table(['Mã','Thưởng','Đã dùng','Loại',''],d.codes.map(c=>[c.code,money(c.reward),c.used?'Đã dùng':'Chưa dùng',c.ctype||'—',c.used?'—':'<button class=\"danger\" onclick=\"deleteCode(\''+c.code+'\')\">Xóa</button>']))}
+async function loadSettings(){let d=await api('settings');$('settings').innerHTML=table(['Khóa','Trạng thái',''],d.settings.map(s=>[s.label,s.value==='1'?'<span class="bad">Bảo trì / Tắt</span>':'<span class="ok">Hoạt động</span>','<button class="secondary" onclick="toggleSetting(\''+s.key+'\',\''+s.value+'\')">Đổi trạng thái</button>']))}
+async function toggleSetting(key,value){try{await api('setting',{key,value:value==='1'?'0':'1'});await loadSettings();toast('Đã cập nhật')}catch(e){toast(e.message)}}
+init();
+</script></body></html>'''
+
+_WEB_ADMIN_SESSIONS = {}  # token -> expiry; in-memory, invalidated on process restart
+_WEB_ADMIN_LOGIN_ATTEMPTS = {}  # IP -> (window_start, failed_count)
+_WEB_ADMIN_SESSION_TTL = 8 * 60 * 60
+
+def _web_admin_secret():
+    return os.getenv("WEB_ADMIN_SECRET", "")
+
+def _web_admin_credentials_ok(username, password):
+    expected_user = os.getenv("WEB_ADMIN_USERNAME", "")
+    expected_pass = os.getenv("WEB_ADMIN_PASSWORD", "")
+    return bool(expected_user and expected_pass and _web_admin_secret()
+                and hmac.compare_digest(str(username), expected_user)
+                and hmac.compare_digest(str(password), expected_pass))
+
+def _web_admin_token_valid(request):
+    token = request.cookies.get("pb_admin_session", "")
+    if not token or token not in _WEB_ADMIN_SESSIONS:
+        return False
+    expiry = _WEB_ADMIN_SESSIONS.get(token, 0)
+    if expiry < time.time():
+        _WEB_ADMIN_SESSIONS.pop(token, None)
+        return False
+    return True
+
+def _web_admin_origin_ok(request):
+    origin = request.headers.get("Origin")
+    if not origin:
+        return True
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme).split(',')[0].strip()
+    expected = f"{scheme}://{request.host}"
+    return hmac.compare_digest(origin.rstrip("/"), expected.rstrip("/"))
+
+async def _wa_json(request):
+    try:
+        data = await request.json()
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+async def web_admin_page(request):
+    return web.Response(text=WEB_ADMIN_HTML, content_type="text/html", headers={"Cache-Control":"no-store"})
+
+async def web_admin_login(request):
+    data = await _wa_json(request)
+    if not _web_admin_origin_ok(request):
+        return web.json_response({"error":"Nguồn yêu cầu không hợp lệ"}, status=403)
+    if not (os.getenv("WEB_ADMIN_USERNAME") and os.getenv("WEB_ADMIN_PASSWORD") and _web_admin_secret()):
+        return web.json_response({"error":"Chưa cấu hình WEB_ADMIN_USERNAME, WEB_ADMIN_PASSWORD và WEB_ADMIN_SECRET trên Railway."}, status=503)
+    ip = request.remote or "unknown"
+    now = time.time()
+    window_start, failed_count = _WEB_ADMIN_LOGIN_ATTEMPTS.get(ip, (now, 0))
+    if now - window_start > 300:
+        window_start, failed_count = now, 0
+    if failed_count >= 5:
+        return web.json_response({"error":"Quá nhiều lần đăng nhập sai. Thử lại sau 5 phút."}, status=429)
+    if not _web_admin_credentials_ok(data.get("username", ""), data.get("password", "")):
+        _WEB_ADMIN_LOGIN_ATTEMPTS[ip] = (window_start, failed_count + 1)
+        await asyncio.sleep(0.5)
+        return web.json_response({"error":"Sai tài khoản hoặc mật khẩu."}, status=401)
+    _WEB_ADMIN_LOGIN_ATTEMPTS.pop(ip, None)
+    token = hmac.new(_web_admin_secret().encode(), os.urandom(32) + str(time.time()).encode(), hashlib.sha256).hexdigest()
+    _WEB_ADMIN_SESSIONS[token] = time.time() + _WEB_ADMIN_SESSION_TTL
+    resp = web.json_response({"ok":True})
+    resp.set_cookie("pb_admin_session", token, httponly=True, secure=(request.secure or request.headers.get("X-Forwarded-Proto", "").lower().startswith("https")),
+                    samesite="Strict", max_age=_WEB_ADMIN_SESSION_TTL, path="/admin")
+    return resp
+
+async def web_admin_logout(request):
+    token = request.cookies.get("pb_admin_session", "")
+    _WEB_ADMIN_SESSIONS.pop(token, None)
+    resp = web.json_response({"ok":True})
+    resp.del_cookie("pb_admin_session", path="/admin")
+    return resp
+
+async def web_admin_me(request):
+    return web.json_response({"ok":True})
+
+async def web_admin_dashboard(request):
+    u = (query("SELECT COUNT(*), COALESCE(SUM(balance),0) FROM users") or [(0,0)])[0]
+    d = (query("SELECT COALESCE(SUM(amount),0) FROM deposit_history WHERE status='success'") or [(0,)])[0][0]
+    w = (query("SELECT COALESCE(SUM(amount),0) FROM withdraw_history WHERE status='success'") or [(0,)])[0][0]
+    deps = query('SELECT id,user_id,amount,status,"time" FROM deposit_history ORDER BY id DESC LIMIT 8') or []
+    wds = query('SELECT id,user_id,amount,status,"time" FROM withdraw_history ORDER BY id DESC LIMIT 8') or []
+    recent = [{"kind":"Nạp","user_id":r[1],"amount":r[2],"status":html.escape(str(r[3] or "")),"time":html.escape(str(r[4] or ""))} for r in deps]
+    recent += [{"kind":"Rút","user_id":r[1],"amount":r[2],"status":html.escape(str(r[3] or "")),"time":html.escape(str(r[4] or ""))} for r in wds]
+    recent.sort(key=lambda x: str(x.get("time") or ""), reverse=True)
+    return web.json_response({"users":int(u[0] or 0),"balance":int(u[1] or 0),"deposit":int(d or 0),"withdraw":int(w or 0),"recent":recent[:12],"time":get_vietnam_datetime_db()})
+
+async def web_admin_users(request):
+    q = (request.query.get("q") or "").strip()[:100]
+    if q.isdigit():
+        rows = query("SELECT user_id,balance,total_bet,name,bank,stk FROM users WHERE user_id=%s ORDER BY user_id DESC LIMIT 100", (int(q),)) or []
+    elif q:
+        like = "%" + q.replace("%", "") + "%"
+        rows = query("SELECT user_id,balance,total_bet,name,bank,stk FROM users WHERE COALESCE(name,'') ILIKE %s OR COALESCE(bank,'') ILIKE %s OR COALESCE(stk,'') ILIKE %s ORDER BY user_id DESC LIMIT 100", (like,like,like)) or []
+    else:
+        rows = query("SELECT user_id,balance,total_bet,name,bank,stk FROM users ORDER BY user_id DESC LIMIT 100") or []
+    banned = {int(r[0]) for r in (query("SELECT user_id FROM banned") or [])}
+    return web.json_response({"users":[{"user_id":int(r[0]),"balance":int(r[1] or 0),"total_bet":int(r[2] or 0),"name":html.escape(str(r[3] or "")),"bank":html.escape(str(r[4] or "")),"stk":html.escape(str(r[5] or "")),"banned":int(r[0]) in banned} for r in rows]})
+
+async def web_admin_user(request):
+    uid = int(request.match_info["uid"])
+    rows = query("SELECT user_id,balance,refs,refed,bank,stk,name,total_bet,vip_spent FROM users WHERE user_id=%s", (uid,)) or []
+    if not rows:
+        return web.json_response({"error":"Không tìm thấy người dùng"}, status=404)
+    r = rows[0]
+    dep = (query("SELECT COALESCE(SUM(amount),0) FROM deposit_history WHERE user_id=%s AND status='success'",(uid,)) or [(0,)])[0][0]
+    wd = (query("SELECT COALESCE(SUM(amount),0) FROM withdraw_history WHERE user_id=%s AND status='success'",(uid,)) or [(0,)])[0][0]
+    hist = query("SELECT amount,note,time FROM history WHERE user_id=%s ORDER BY id DESC LIMIT 30",(uid,)) or []
+    payout = query("SELECT method,bank_code,account_number,account_name,is_default FROM user_payout_accounts WHERE user_id=%s ORDER BY is_default DESC,id DESC LIMIT 20",(uid,)) or []
+    features = {str(x[0]) for x in (query("SELECT feature FROM banned_features WHERE user_id=%s",(uid,)) or [])}
+    return web.json_response({"blocked_features":sorted(features),"payout_accounts":[{"method":x[0],"bank_code":html.escape(str(x[1] or "")),"account_number":html.escape(str(x[2] or "")),"account_name":html.escape(str(x[3] or "")),"is_default":bool(x[4])} for x in payout],"user_id":int(r[0]),"balance":int(r[1] or 0),"refs":int(r[2] or 0),"refed":int(r[3] or 0),"bank":html.escape(str(r[4] or "")),"stk":html.escape(str(r[5] or "")),"name":html.escape(str(r[6] or "")),"total_bet":int(r[7] or 0),"vip_spent":int(r[8] or 0),"deposit":int(dep or 0),"withdraw":int(wd or 0),"banned":is_banned(uid),"history":[{"amount":int(x[0] or 0),"note":html.escape(str(x[1] or "")),"time":html.escape(str(x[2] or ""))} for x in hist]})
+
+async def web_admin_balance(request):
+    if not _web_admin_origin_ok(request): return web.json_response({"error":"Nguồn yêu cầu không hợp lệ"},status=403)
+    d=await _wa_json(request)
+    try:
+        uid=int(d.get("user_id")); amount=int(d.get("amount")); action=d.get("action"); reason=str(d.get("reason") or "Điều chỉnh từ Web Admin").strip()[:200]
+    except Exception: return web.json_response({"error":"Thông tin không hợp lệ"},status=400)
+    if uid in ADMIN_IDS or amount<=0 or amount>1_000_000_000_000 or action not in ("add","sub"):
+        return web.json_response({"error":"Không thể thực hiện thao tác này"},status=400)
+    if not (query("SELECT 1 FROM users WHERE user_id=%s",(uid,)) or []):
+        return web.json_response({"error":"Không tìm thấy người dùng"},status=404)
+    if action=="sub":
+        row=query("UPDATE users SET balance=balance-%s WHERE user_id=%s AND balance >= %s RETURNING balance",(amount,uid,amount))
+        if not row: return web.json_response({"error":"Số dư không đủ"},status=400)
+        before=int(row[0][0])+amount; after=int(row[0][0]); delta=-amount
+    else:
+        row=query("UPDATE users SET balance=balance+%s WHERE user_id=%s RETURNING balance",(amount,uid))
+        if not row: return web.json_response({"error":"Không thể cập nhật số dư"},status=400)
+        after=int(row[0][0]); before=after-amount; delta=amount
+    note=f"Web Admin: {reason}"
+    query("INSERT INTO history(user_id,amount,note,time,bal_before,bal_after) VALUES(%s,%s,%s,%s,%s,%s)",(uid,delta,note,get_vietnam_datetime_db(),before,after))
+    query("INSERT INTO settings(key,value) VALUES(%s,%s) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",(f"web_admin_last_action_{uid}",f"{delta}:{get_vietnam_datetime_db()}"))
+    return web.json_response({"ok":True,"balance":after})
+
+async def web_admin_ban(request):
+    if not _web_admin_origin_ok(request): return web.json_response({"error":"Nguồn yêu cầu không hợp lệ"},status=403)
+    d=await _wa_json(request)
+    try: uid=int(d.get("user_id")); banned=bool(d.get("banned"))
+    except Exception: return web.json_response({"error":"Thông tin không hợp lệ"},status=400)
+    if uid in ADMIN_IDS: return web.json_response({"error":"Không thể khóa tài khoản admin hệ thống"},status=400)
+    if banned: query("INSERT INTO banned(user_id) VALUES(%s) ON CONFLICT(user_id) DO NOTHING",(uid,))
+    else: query("DELETE FROM banned WHERE user_id=%s",(uid,))
+    return web.json_response({"ok":True})
+
+async def web_admin_feature(request):
+    if not _web_admin_origin_ok(request): return web.json_response({"error":"Nguồn yêu cầu không hợp lệ"},status=403)
+    d=await _wa_json(request)
+    try: uid=int(d.get("user_id")); feature=str(d.get("feature")); blocked=bool(d.get("blocked"))
+    except Exception: return web.json_response({"error":"Thông tin không hợp lệ"},status=400)
+    if uid in ADMIN_IDS or feature not in ("nap","rut"): return web.json_response({"error":"Không thể thay đổi quyền này"},status=400)
+    if blocked: query("INSERT INTO banned_features(user_id,feature) VALUES(%s,%s) ON CONFLICT DO NOTHING",(uid,feature))
+    else: query("DELETE FROM banned_features WHERE user_id=%s AND feature=%s",(uid,feature))
+    return web.json_response({"ok":True})
+
+async def web_admin_transactions(request):
+    d=query('SELECT id,user_id,amount,status,"time" FROM deposit_history ORDER BY id DESC LIMIT 100') or []
+    w=query('SELECT id,user_id,amount,status,"time" FROM withdraw_history ORDER BY id DESC LIMIT 100') or []
+    conv=lambda rows:[{"id":int(x[0]),"user_id":int(x[1] or 0),"amount":int(x[2] or 0),"status":html.escape(str(x[3] or "")),"time":html.escape(str(x[4] or ""))} for x in rows]
+    return web.json_response({"deposits":conv(d),"withdrawals":conv(w)})
+
+async def web_admin_create_code(request):
+    if not _web_admin_origin_ok(request): return web.json_response({"error":"Nguồn yêu cầu không hợp lệ"},status=403)
+    d=await _wa_json(request)
+    try:
+        code=str(d.get("code") or ("PB"+hashlib.sha1(os.urandom(16)).hexdigest()[:10].upper())).strip().upper()
+        reward=int(d.get("reward")); wager=int(d.get("wager",1)); uses=int(d.get("uses",1))
+    except Exception: return web.json_response({"error":"Dữ liệu giftcode không hợp lệ"},status=400)
+    if not re.fullmatch(r"[A-Z0-9_-]{4,32}",code) or reward<=0 or reward>1_000_000_000 or wager<1 or wager>100 or uses<1 or uses>100000:
+        return web.json_response({"error":"Kiểm tra mã, thưởng, vòng cược và lượt sử dụng"},status=400)
+    if query("SELECT 1 FROM giftcodes WHERE code=%s",(code,)):
+        return web.json_response({"error":"Mã giftcode đã tồn tại"},status=409)
+    # Schema giftcodes hiện tại có trường used (đã sử dụng), không có bộ đếm lượt.
+    # Web tạo mã NAP có cùng cơ chế với giftcode nạp đang dùng trong bot.
+    expiry=get_vietnam_time()+timedelta(days=365)
+    query("INSERT INTO giftcodes(code,ctype,reward,wager,expiry,require_deposit,required_amount,bound_user,used,created_by,created_at) VALUES(%s,'NAP',%s,%s,%s,0,0,NULL,0,%s,%s)",(code,reward,wager,expiry,ADMIN_IDS[0],get_vietnam_datetime_db()))
+    # Lưu metadata số lượt tối đa riêng để không làm thay đổi schema/luồng redeem cũ.
+    query("CREATE TABLE IF NOT EXISTS web_admin_giftcode_meta(code TEXT PRIMARY KEY,max_uses INTEGER DEFAULT 1)")
+    query("INSERT INTO web_admin_giftcode_meta(code,max_uses) VALUES(%s,%s) ON CONFLICT(code) DO UPDATE SET max_uses=EXCLUDED.max_uses",(code,uses))
+    return web.json_response({"ok":True,"code":code})
+
+async def web_admin_withdraw(request):
+    if not _web_admin_origin_ok(request): return web.json_response({"error":"Nguồn yêu cầu không hợp lệ"},status=403)
+    d=await _wa_json(request)
+    try: wid=int(d.get("id")); action=str(d.get("action"))
+    except Exception: return web.json_response({"error":"Thông tin không hợp lệ"},status=400)
+    if action not in ("approve","reject"): return web.json_response({"error":"Thao tác không hợp lệ"},status=400)
+    row=query("UPDATE withdraw_history SET status=%s,admin_id=%s,admin_note=%s WHERE id=%s AND status='pending' RETURNING user_id,amount",("success" if action=="approve" else "rejected",ADMIN_IDS[0],"Đánh dấu đã chuyển từ Web Admin" if action=="approve" else "Từ chối từ Web Admin",wid))
+    if not row: return web.json_response({"error":"Không tìm thấy yêu cầu đang chờ hoặc yêu cầu đã được xử lý"},status=409)
+    uid,amount=int(row[0][0]),int(row[0][1])
+    if action=="reject":
+        add_money(uid,amount,"Hoàn tiền rút")
+        notice=f"❌ Yêu cầu rút {fmt_money(amount)}đ bị từ chối. Tiền đã được hoàn về số dư."
+    else:
+        notice=f"✅ Yêu cầu rút {fmt_money(amount)}đ đã được admin đánh dấu chuyển thành công."
+    if _bot_instance:
+        try: await _bot_instance.send_message(uid,notice)
+        except Exception as e: print(f"Web Admin: không gửi được thông báo rút cho {uid}: {e}")
+    return web.json_response({"ok":True})
+
+async def web_admin_delete_code(request):
+    if not _web_admin_origin_ok(request): return web.json_response({"error":"Nguồn yêu cầu không hợp lệ"},status=403)
+    d=await _wa_json(request); code=str(d.get("code") or "").strip().upper()
+    row=query("DELETE FROM giftcodes WHERE code=%s AND used=0 RETURNING code",(code,))
+    if not row: return web.json_response({"error":"Không tìm thấy code chưa sử dụng"},status=404)
+    query("DELETE FROM web_admin_giftcode_meta WHERE code=%s",(code,))
+    return web.json_response({"ok":True})
+
+async def web_admin_codes(request):
+    rows=query("SELECT code,ctype,reward,used FROM giftcodes ORDER BY created_at DESC LIMIT 100") or []
+    return web.json_response({"codes":[{"code":html.escape(str(r[0])),"ctype":html.escape(str(r[1] or "")),"reward":int(r[2] or 0),"used":bool(r[3])} for r in rows]})
+
+async def web_admin_settings(request):
+    rows=query("SELECT key,value FROM settings WHERE key LIKE 'mt_%' ORDER BY key") or []
+    labels={"mt_taixiu_room":"Tài Xỉu Room","mt_xucxac_don":"Xúc Xắc Đơn","mt_longho":"Long Hổ","mt_minipoker":"Mini Poker","mt_baccarat":"Baccarat","mt_xocdia4":"Xóc Đĩa 4 Vị","mt_taixiumd5":"Tài Xỉu MD5","mt_baucua":"Bầu Cua","mt_xocdia6":"Xóc Đĩa 6 Vị","mt_nap":"Nạp tiền","mt_rut":"Rút tiền"}
+    return web.json_response({"settings":[{"key":r[0],"value":r[1],"label":labels.get(r[0],r[0])} for r in rows]})
+
+async def web_admin_setting(request):
+    if not _web_admin_origin_ok(request): return web.json_response({"error":"Nguồn yêu cầu không hợp lệ"},status=403)
+    d=await _wa_json(request); key=str(d.get("key") or ""); value=str(d.get("value") or "")
+    allowed={v[0] for v in ADMIN_GAMES.values()} | {v[0] for v in ADMIN_FEATURES.values()}
+    if key not in allowed or value not in ("0","1"): return web.json_response({"error":"Cấu hình không hợp lệ"},status=400)
+    query("UPDATE settings SET value=%s WHERE key=%s",(value,key))
+    return web.json_response({"ok":True})
+
+@web.middleware
+async def web_admin_auth_middleware(request, handler):
+    if request.path.startswith("/admin/api/") and request.path not in ("/admin/api/login",):
+        if not _web_admin_token_valid(request): return web.json_response({"error":"Chưa đăng nhập hoặc phiên đã hết hạn"},status=401)
+    return await handler(request)
+
+def register_web_admin_routes(app):
+    app.middlewares.append(web_admin_auth_middleware)
+    app.router.add_get("/admin", web_admin_page)
+    app.router.add_get("/admin/", web_admin_page)
+    app.router.add_post("/admin/api/login", web_admin_login)
+    app.router.add_post("/admin/api/logout", web_admin_logout)
+    app.router.add_get("/admin/api/me", web_admin_me)
+    app.router.add_get("/admin/api/dashboard", web_admin_dashboard)
+    app.router.add_get("/admin/api/users", web_admin_users)
+    app.router.add_get("/admin/api/user/{uid}", web_admin_user)
+    app.router.add_post("/admin/api/balance", web_admin_balance)
+    app.router.add_post("/admin/api/ban", web_admin_ban)
+    app.router.add_post("/admin/api/feature", web_admin_feature)
+    app.router.add_post("/admin/api/withdraw", web_admin_withdraw)
+    app.router.add_get("/admin/api/transactions", web_admin_transactions)
+    app.router.add_post("/admin/api/code", web_admin_create_code)
+    app.router.add_post("/admin/api/code/delete", web_admin_delete_code)
+    app.router.add_get("/admin/api/codes", web_admin_codes)
+    app.router.add_get("/admin/api/settings", web_admin_settings)
+    app.router.add_post("/admin/api/setting", web_admin_setting)
+
+
 async def start_webhook_server():
     app = web.Application()
     # Nhận webhook ở cả gốc "/" lẫn /sepay_webhook (SePay đang gọi thẳng tên miền, không kèm đường dẫn).
@@ -7431,6 +7724,7 @@ async def start_webhook_server():
     app.router.add_get('/', _health)
     app.router.add_get('/health', _health)
     tx3d_register_routes(app)      # miniapp Tài Xỉu 3D: /app , /api/state , /api/bet
+    register_web_admin_routes(app) # Web Admin: /admin (đăng nhập riêng)
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.getenv("PORT", "8080"))   # Railway cấp cổng qua biến PORT
