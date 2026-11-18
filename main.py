@@ -35,15 +35,15 @@ BOT_USERNAME = "no99_gamebot"
 ROOM_LINK = "https://t.me/no99sanhu"
 MIN_WITHDRAW = 50000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
-LOG_GROUP_ID = -1004441562146
+LOG_GROUP_ID = -1004434938082
 
 # THÔNG TIN NGÂN HÀNG MỚI
-BANK_ID = "MB"
-ACCOUNT_NO = "93039798386"
-ACCOUNT_NAME = "BACH MINH NHUT"
+BANK_ID = "TPB"
+ACCOUNT_NO = "10006353242"
+ACCOUNT_NAME = "LUC TUAN HUNG"
 
 _bot_instance = None
-GROUP_IDS = [-1004441562146]
+GROUP_IDS = [-1004434938082]
 
 group_games = {}
 room_betting_enabled = {}
