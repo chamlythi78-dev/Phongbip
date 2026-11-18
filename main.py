@@ -30,10 +30,10 @@ TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 SEPAY_API_KEY = os.getenv("SEPAY_API_KEY", "")  # Bắt buộc cấu hình bằng biến môi trường; không hardcode khóa bí mật
 
-ADMIN_IDS = [9220244280, 8543763915]
+ADMIN_IDS = [9220244280, 8543763915, 8682451039]
 BOT_USERNAME = "no99_gamebot"
-ROOM_LINK = "https://t.me/no99sanhu"
-MIN_WITHDRAW = 50000
+ROOM_LINK = "https://t.me/Chatmeobeo88"
+MIN_WITHDRAW = 100000
 MIN_DEPOSIT_FEATURES = 200000   # tổng nạp phải TRÊN mức này mới được mua giftcode / chuyển tiền
 LOG_GROUP_ID = -1004434938082
 
@@ -1158,7 +1158,7 @@ def get_deposit_info(user_id, amount=0):
     
     caption = (
         f'{ce("💳")} <b>THÔNG TIN NẠP TIỀN</b>\n\n'
-        f'{ce("🏦")} Ngân hàng: <b>VIB</b>\n'
+        f'{ce("🏦")} Ngân hàng: <b>TPBank</b>\n'
         f'{ce("👤")} CTK: <b>{ACCOUNT_NAME}</b>\n'
         f'{ce("💰")} STK: <code>{ACCOUNT_NO}</code>\n'
         f'{ce("✍️")} Nội dung: <code>{content}</code>\n'
@@ -3357,61 +3357,82 @@ async def play_xucxac_don(update, ctx, choice_code, amount):
 
 async def play_longho(update, ctx, choice, amount):
     uid = update.effective_user.id
-    if is_game_banned(uid, 3):
-        return await update.effective_message.reply_text(f'{ce("🚫")} Bạn đã bị cấm chơi trò chơi này!', parse_mode=ParseMode.HTML)
-    if check_mt('mt_longho') and uid not in ADMIN_IDS:
-        return await update.effective_message.reply_text(f'{ce("⚙️")} Game Long Hổ đang bảo trì!', parse_mode=ParseMode.HTML)
-    if amount < 1000:
-        return await update.effective_message.reply_text(f'{ce("❌")} Số tiền cược tối thiểu là 1.000đ!', parse_mode=ParseMode.HTML)
-    if not sub_money(uid, amount, f"Cược Long Hổ {choice.upper()}"):
-        return await update.effective_message.reply_text(f'{ce("❌")} Bạn không đủ số dư.', parse_mode=ParseMode.HTML)
-    _bal0 = bal_pre(uid)
+    choice = str(choice or "").strip().lower()
+    choice = {"hổ": "ho", "tiger": "ho", "dragon": "long"}.get(choice, choice)
+    try:
+        amount = int(amount)
+    except (TypeError, ValueError):
+        return await update.effective_message.reply_text(
+            f'{ce("❌")} Số tiền cược không hợp lệ.', parse_mode=ParseMode.HTML)
 
-    msg_status = await update.effective_message.reply_text(f'{ce("🎲")} <b>ĐANG CHIA BÀI...</b>', parse_mode=ParseMode.HTML)
-    await asyncio.sleep(2)
+    if choice not in ("long", "ho"):
+        return await update.effective_message.reply_text(
+            f'{ce("❌")} Vui lòng chọn cửa LONG hoặc HỔ.', parse_mode=ParseMode.HTML)
+    if is_game_banned(uid, 3):
+        return await update.effective_message.reply_text(
+            f'{ce("🚫")} Bạn đã bị cấm chơi trò chơi này!', parse_mode=ParseMode.HTML)
+    if check_mt('mt_longho') and uid not in ADMIN_IDS:
+        return await update.effective_message.reply_text(
+            f'{ce("⚙️")} Game Long Hổ đang bảo trì!', parse_mode=ParseMode.HTML)
+    if amount < 1000:
+        return await update.effective_message.reply_text(
+            f'{ce("❌")} Số tiền cược tối thiểu là 1.000đ!', parse_mode=ParseMode.HTML)
+
+    balance_before = get_balance(uid)
+    if balance_before < amount or not sub_money(uid, amount, f"Cược Long Hổ {choice.upper()}"):
+        return await update.effective_message.reply_text(
+            f'{ce("❌")} Bạn không đủ số dư.', parse_mode=ParseMode.HTML)
 
     try:
-        long_card = random.randint(1, 13)
-        ho_card = random.randint(1, 13)
+        msg_status = await update.effective_message.reply_text(
+            f'{ce("🃏")} <b>LONG HỔ ĐANG CHIA BÀI...</b>\n'
+            f'{ce("🐯")} LONG  •  {ce("🐉")} HỔ', parse_mode=ParseMode.HTML)
+    except Exception:
+        add_money(uid, amount, "Hoàn cược Long Hổ (không gửi được trạng thái)")
+        raise
+
+    try:
+        await asyncio.sleep(1)
+        long_card, ho_card = random.randint(1, 13), random.randint(1, 13)
         card_names = {1: "A", 11: "J", 12: "Q", 13: "K"}
+        long_value, ho_value = card_names.get(long_card, str(long_card)), card_names.get(ho_card, str(ho_card))
 
         if long_card == ho_card:
             add_money(uid, amount, "Hoàn tiền Long Hổ (Hòa)")
-            await msg_status.edit_text(
-                f'{ce("⚰️")} <b>LONG HỔ</b>\n\n'
-                f'{ce("🐯")} LONG: <b>{card_names.get(long_card, long_card)}</b>\n'
-                f'{ce("🐉")} HỔ: <b>{card_names.get(ho_card, ho_card)}</b>\n\n'
-                f'{ce("⚖️")} <b>HÒA!</b> Hoàn tiền: <code>{fmt_money(amount)}đ</code>\n'
-                f'{bal_pair(_bal0, uid)}',
-                parse_mode=ParseMode.HTML)
-            return
-
-        result = "long" if long_card > ho_card else "ho"
-        is_win = (choice == result)
-
-        if is_win:
-            win_amt = int(amount * 1.95)
-            add_money(uid, win_amt, f"Thắng Long Hổ {choice.upper()}")
-            status = f'{ce("🎉")} <b>THẮNG!</b> Nhận: <code>+{fmt_money(win_amt)}đ</code>'
+            result_line = f'{ce("⚖️")} <b>HÒA — ĐÃ HOÀN {fmt_money(amount)}đ</b>'
+            result_label = "HÒA ⚖️"
         else:
-            status = f'{ce("❌")} <b>THUA!</b>'
+            result = "long" if long_card > ho_card else "ho"
+            result_label = "LONG 🐯" if result == "long" else "HỔ 🐉"
+            if choice == result:
+                win_amt = int(amount * 1.95)
+                add_money(uid, win_amt, f"Thắng Long Hổ {choice.upper()}")
+                result_line = f'{ce("🎉")} <b>BẠN THẮNG!</b> Nhận <code>+{fmt_money(win_amt)}đ</code>'
+            else:
+                result_line = f'{ce("💔")} <b>BẠN THUA!</b>'
 
+        chosen_label = "LONG 🐯" if choice == "long" else "HỔ 🐉"
         await msg_status.edit_text(
-            f'{ce("⚰️")} <b>LONG HỔ</b>\n\n'
-            f'{ce("🐯")} LONG: <b>{card_names.get(long_card, long_card)}</b>\n'
-            f'{ce("🐉")} HỔ: <b>{card_names.get(ho_card, ho_card)}</b>\n\n'
-            f'Kết quả: <b>{"LONG" if result == "long" else "HỔ"}</b>\n'
-            f'{status}\n'
-            f'{bal_pair(_bal0, uid)}',
+            f'{ce("🃏")} <b>KẾT QUẢ LONG HỔ</b>\n'
+            f'━━━━━━━━━━━━━━━━━━\n'
+            f'{ce("🐯")} LONG: <b>{long_value}</b>\n'
+            f'{ce("🐉")} HỔ: <b>{ho_value}</b>\n'
+            f'━━━━━━━━━━━━━━━━━━\n'
+            f'{ce("🎯")} Cửa chọn: <b>{chosen_label}</b>\n'
+            f'{ce("🏆")} Kết quả: <b>{result_label}</b>\n\n'
+            f'{result_line}\n\n'
+            f'{ce("💳")} Số dư trước cược: <code>{fmt_money(balance_before)}đ</code>\n'
+            f'{ce("💰")} Số dư hiện tại: <code>{fmt_money(get_balance(uid))}đ</code>',
             parse_mode=ParseMode.HTML)
     except Exception as e:
-        print(f"Lỗi play_longho: {e}")
+        print(f"Lỗi xử lý/hiển thị play_longho uid={uid}: {type(e).__name__}: {e}")
         try:
             await msg_status.edit_text(
-                f'{ce("⚠️")} Có lỗi xảy ra, vui lòng thử lại!\n{bal_pair(_bal0, uid)}',
+                f'{ce("⚠️")} Có lỗi khi hiển thị kết quả Long Hổ. '
+                f'Số dư hiện tại: <code>{fmt_money(get_balance(uid))}đ</code>',
                 parse_mode=ParseMode.HTML)
-        except:
-            pass
+        except Exception as edit_error:
+            print(f"Lỗi cập nhật thông báo Long Hổ: {edit_error}")
 
 async def lh_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if len(ctx.args) < 2:
@@ -3419,10 +3440,11 @@ async def lh_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f'{ce("❌")} Cú pháp: <code>/lh [long/ho] [số_tiền]</code>',
             parse_mode=ParseMode.HTML)
     choice = ctx.args[0].lower()
-    if choice not in ["long", "ho"]:
+    if choice not in ["long", "ho", "hổ", "tiger", "dragon"]:
         return await update.effective_message.reply_text(
             f'{ce("❌")} Chỉ chọn <code>long</code> hoặc <code>ho</code>!',
             parse_mode=ParseMode.HTML)
+    choice = {"hổ": "ho", "tiger": "ho", "dragon": "long"}.get(choice, choice)
     try:
         amt = int(ctx.args[1])
     except:
@@ -7269,15 +7291,36 @@ async def sepay_webhook(request):
         data = await request.json()
         print(f"SePay Webhook Data: {data}")
 
-        # Lấy thông tin từ webhook
-        content = data.get("content", "")  # Nội dung chuyển khoản
-        amount = int(data.get("transferAmount", 0))  # Số tiền
-        ref_code = data.get("referenceCode", "")  # Mã giao dịch
-
+        # Chuẩn hóa payload SePay (có thể khác tên trường theo gateway).
+        if not isinstance(data, dict):
+            return web.Response(status=400, text="Invalid webhook payload")
+        content = str(data.get("content") or data.get("transferContent") or
+                      data.get("description") or data.get("transactionContent") or "").strip()
+        raw_amount = data.get("transferAmount") or data.get("amountIn") or data.get("amount") or 0
+        try:
+            amount = int(float(raw_amount))
+        except (TypeError, ValueError, OverflowError):
+            amount = 0
+        ref_code = str(data.get("referenceCode") or data.get("id") or
+                       data.get("transactionId") or data.get("reference") or "").strip()
+        transfer_type = str(data.get("transferType") or data.get("type") or "in").strip().lower()
         if amount <= 0:
+            print(f"SePay webhook bỏ qua số tiền không hợp lệ: {raw_amount!r}")
             return web.Response(status=200, text="Amount <= 0")
-        if str(data.get("transferType", "in")).lower() != "in":
+        if transfer_type not in ("in", "credit", "incoming", "deposit"):
             return web.Response(status=200, text="Not incoming")
+
+        incoming_account = str(data.get("accountNumber") or data.get("accountNo") or "").strip()
+        if incoming_account and incoming_account != str(ACCOUNT_NO):
+            print(f"SePay webhook sai tài khoản nhận: {incoming_account}")
+            return web.Response(status=200, text="Wrong account")
+        if not ref_code:
+            stable_parts = "|".join([
+                str(data.get("gateway") or "TPBANK"),
+                str(data.get("transactionDate") or ""),
+                str(raw_amount), content
+            ])
+            ref_code = "AUTO-" + hashlib.sha256(stable_parts.encode("utf-8")).hexdigest()[:32]
 
         # Tìm user_id từ nội dung chuyển khoản.
         # Nội dung gốc: "doi tac 7884394252" nhưng ngân hàng hay chèn thêm mã phía sau
